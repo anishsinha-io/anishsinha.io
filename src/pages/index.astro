@@ -1,0 +1,35 @@
+---
+import BaseHead from "~/components/BaseHead.astro";
+import Header from "~/components/Header.astro";
+import Footer from "~/components/Footer.astro";
+import { SITE_TITLE, SITE_DESCRIPTION } from "~/consts";
+import "~/styles/global.css";
+---
+
+<!doctype html>
+<html lang="en">
+  <head>
+    <BaseHead title={SITE_TITLE} description={SITE_DESCRIPTION} />
+  </head>
+  <body
+    class="bg-offwhite text-midnight font-main once dark:bg-midnight dark:text-offwhite"
+  >
+    <div class="flex flex-col gap-4 items-center h-screen">
+      <Header />
+      <main class="flex flex-col flex-1 gap-2 items-center">
+        <div class="flex items-center h-full text-xl max-w-[30rem]">
+          <div class="flex flex-col gap-4">
+            <p class="text-center">
+              Hey, I'm Anish. I'm a software engineer. This is my corner of the
+              internet.
+            </p>
+            <div class="flex gap-2 justify-center p-2 text-lg max-w-[30rem]">
+              <a href="/code">Code</a>
+            </div>
+          </div>
+        </div>
+      </main>
+      <Footer />
+    </div>
+  </body>
+</html>
