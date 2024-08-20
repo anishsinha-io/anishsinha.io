@@ -7,5 +7,5 @@ export const SITE_DESCRIPTION =
 
 export const TAG_COLORS: { [key: string]: string } = {
   rust: "#E43717",
-  axum: "#0645B1",
+  axum: "#E00034 ",
 };

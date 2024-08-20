@@ -8,6 +8,37 @@ tags:
   - axum
 ---
 
+```rust
+pub async fn rbac(
+    State(ctx): State<Arc<Context>>,
+    header: TypedHeader<Authorization<Bearer>>,
+    mut request: Request,
+    next: Next,
+    roles: Vec<String>,
+) -> Result<impl IntoResponse, AppError> {
+    let authenticator = &ctx.authenticator;
+    let token = header.0.token();
+
+    log::info!("{}\n{:?}", token, roles);
+    let data = authenticator.authenticate(token).await?;
+
+    request.extensions_mut().insert(data);
+    Ok(next.run(request).await)
+}
+
+pub async fn make_rbac(
+    roles: Vec<String>,
+) -> impl Fn(
+    State<Arc<Context>>,
+    TypedHeader<Authorization<Bearer>>,
+    Request,
+    Next,
+) -> Pin<Box<dyn Future<Output = Result<impl IntoResponse, AppError>> + Send + 'static>>
+       + Clone {
+    move |state, header, request, next| Box::pin(rbac(state, header, request, next, roles.clone()))
+}
+```
+
 Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Vitae ultricies leo integer malesuada nunc vel risus commodo viverra. Adipiscing enim eu turpis egestas pretium. Euismod elementum nisi quis eleifend quam adipiscing. In hac habitasse platea dictumst vestibulum. Sagittis purus sit amet volutpat. Netus et malesuada fames ac turpis egestas. Eget magna fermentum iaculis eu non diam phasellus vestibulum lorem. Varius sit amet mattis vulputate enim. Habitasse platea dictumst quisque sagittis. Integer quis auctor elit sed vulputate mi. Dictumst quisque sagittis purus sit amet.
 
 Morbi tristique senectus et netus. Id semper risus in hendrerit gravida rutrum quisque non tellus. Habitasse platea dictumst quisque sagittis purus sit amet. Tellus molestie nunc non blandit massa. Cursus vitae congue mauris rhoncus. Accumsan tortor posuere ac ut. Fringilla urna porttitor rhoncus dolor. Elit ullamcorper dignissim cras tincidunt lobortis. In cursus turpis massa tincidunt dui ut ornare lectus. Integer feugiat scelerisque varius morbi enim nunc. Bibendum neque egestas congue quisque egestas diam. Cras ornare arcu dui vivamus arcu felis bibendum. Dignissim suspendisse in est ante in nibh mauris. Sed tempus urna et pharetra pharetra massa massa ultricies mi.

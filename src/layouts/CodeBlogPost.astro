@@ -19,11 +19,11 @@ const { title, description, pubDate, updatedDate, heroImage, tags } =
   </head>
 
   <body
-    class="bg-offwhite text-midnight font-main dark:bg-midnight dark:text-offwhite"
+    class="duration-300 bg-offwhite text-midnight font-main dark:bg-midnight dark:text-offwhite"
   >
     <Header />
     <main
-      class="flex overflow-y-scroll justify-center pt-20 mx-auto max-w-[50rem]"
+      class="flex overflow-y-scroll justify-center pt-20 mx-auto w-[95%] xs:w-[90%] sm:w-[80%] md:w-[75%] lg:w-[62.5%] xl:w-[57.5%]"
     >
       <article class="flex flex-col gap-2 justify-center p-2">
         <div class="mb-4 hero-image">
@@ -39,8 +39,23 @@ const { title, description, pubDate, updatedDate, heroImage, tags } =
             )
           }
         </div>
+        <div class="flex gap-2 justify-end">
+          {
+            tags.map((el) => (
+              <Badge
+                style={{
+                  backgroundColor: TAG_COLORS[el],
+                  color: "#f9f9f9",
+                  border: "none",
+                }}
+              >
+                {el}
+              </Badge>
+            ))
+          }
+        </div>
         <div class="prose">
-          <div class="flex gap-2 mt-4 mb-4 w-full">
+          <div class="flex gap-2 mt-4 mb-4 w-full text-center">
             <div class="flex flex-col gap-2 w-full">
               <h1 class="text-3xl font-bold">{title}</h1>
               <FormattedDate date={pubDate} />
@@ -51,23 +66,7 @@ const { title, description, pubDate, updatedDate, heroImage, tags } =
               <!--     </div> -->
               <!--   ) -->
               <!-- } -->
-              <div class="flex gap-2">
-                {
-                  tags.map((el) => (
-                    <Badge
-                      style={{
-                        backgroundColor: TAG_COLORS[el],
-                        color: "#f9f9f9",
-                        border: "none",
-                      }}
-                    >
-                      {el}
-                    </Badge>
-                  ))
-                }
-              </div>
             </div>
-            <hr />
           </div>
           <slot />
         </div>
