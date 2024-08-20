@@ -1,0 +1,78 @@
+---
+import type { CollectionEntry } from "astro:content";
+import BaseHead from "~/components/BaseHead.astro";
+import Header from "~/components/Header.astro";
+import Footer from "~/components/Footer.astro";
+import FormattedDate from "~/components/FormattedDate.astro";
+import { Badge } from "~/components/ui/badge";
+import { TAG_COLORS } from "~/consts";
+
+type Props = CollectionEntry<"code">["data"];
+
+const { title, description, pubDate, updatedDate, heroImage, tags } =
+  Astro.props;
+---
+
+<html lang="en">
+  <head>
+    <BaseHead title={title} description={description} />
+  </head>
+
+  <body
+    class="bg-offwhite text-midnight font-main dark:bg-midnight dark:text-offwhite"
+  >
+    <Header />
+    <main
+      class="flex overflow-y-scroll justify-center pt-20 mx-auto max-w-[50rem]"
+    >
+      <article class="flex flex-col gap-2 justify-center p-2">
+        <div class="mb-4 hero-image">
+          {
+            heroImage && (
+              <img
+                width={1020}
+                height={510}
+                src={heroImage}
+                alt=""
+                class="rounded-lg"
+              />
+            )
+          }
+        </div>
+        <div class="prose">
+          <div class="flex gap-2 mt-4 mb-4 w-full">
+            <div class="flex flex-col gap-2 w-full">
+              <h1 class="text-3xl font-bold">{title}</h1>
+              <FormattedDate date={pubDate} />
+              <!-- { -->
+              <!--   updatedDate && ( -->
+              <!--     <div class="last-updated-on"> -->
+              <!--       Last updated on <FormattedDate date={updatedDate} /> -->
+              <!--     </div> -->
+              <!--   ) -->
+              <!-- } -->
+              <div class="flex gap-2">
+                {
+                  tags.map((el) => (
+                    <Badge
+                      style={{
+                        backgroundColor: TAG_COLORS[el],
+                        color: "#f9f9f9",
+                        border: "none",
+                      }}
+                    >
+                      {el}
+                    </Badge>
+                  ))
+                }
+              </div>
+            </div>
+            <hr />
+          </div>
+          <slot />
+        </div>
+      </article>
+    </main>
+    <Footer />
+  </body>
+</html>

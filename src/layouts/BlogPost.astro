@@ -19,8 +19,8 @@ const { title, description, pubDate, updatedDate, heroImage } = Astro.props;
     class="bg-offwhite text-midnight font-main dark:bg-midnight dark:text-offwhite"
   >
     <Header />
-    <main>
-      <article>
+    <main class="flex justify-center mt-12">
+      <article class="flex flex-col gap-2 justify-center p-2 bg-blue-900">
         <div class="hero-image">
           {
             heroImage && (
