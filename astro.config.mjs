@@ -12,7 +12,7 @@ import expressiveCode from "astro-expressive-code";
 
 // https://astro.build/config
 export default defineConfig({
-  site: "https://example.com",
+  site: "https://anishsinha.io",
   integrations: [
     expressiveCode({
       themes: ["catppuccin-mocha"],

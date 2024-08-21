@@ -1,9 +1,49 @@
 ---
-title: 'First post'
-description: 'Lorem ipsum dolor sit amet'
-pubDate: 'Jul 08 2022'
-heroImage: '/blog-placeholder-3.jpg'
+title: "In Search for Code Purity"
+description: "Description here"
+pubDate: "Aug 20 2024"
+heroImage: "/parameterized-axum-middleware.jpeg"
+tags:
+  - rust
+  - axum
 ---
+
+```rust title="src/main.rs" collapse={1-16} ins={18-28}
+pub async fn rbac(
+    State(ctx): State<Arc<Context>>,
+    header: TypedHeader<Authorization<Bearer>>,
+    mut request: Request,
+    next: Next,
+    roles: Vec<String>,
+) -> Result<impl IntoResponse, AppError> {
+    let authenticator = &ctx.authenticator;
+    let token = header.0.token();
+
+    log::info!("{}\n{:?}", token, roles);
+    let data = authenticator.authenticate(token).await?;
+
+    request.extensions_mut().insert(data);
+    Ok(next.run(request).await)
+}
+
+pub async fn make_rbac(
+    roles: Vec<String>,
+) -> impl Fn(
+    State<Arc<Context>>,
+    TypedHeader<Authorization<Bearer>>,
+    Request,
+    Next,
+) -> Pin<Box<dyn Future<Output = Result<impl IntoResponse, AppError>> + Send + 'static>>
+       + Clone {
+    move |state, header, request, next| Box::pin(rbac(state, header, request, next, roles.clone()))
+}
+```
+
+$$ E=mc^2 $$
+
+$$
+\int_{0}^{\infty} x^{2} e^{-x} \, dx = \sum_{n=1}^{\infty} \frac{(-1)^{n+1}}{n} \left(\frac{2\pi i n}{\lambda}\right)^{k} \exp\left(-\frac{2\pi i n x_{0}}{\lambda}\right) \times \frac{\Gamma\left(\frac{k+1}{2}\right)}{\Gamma\left(\frac{k}{2}\right)}
+$$
 
 Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Vitae ultricies leo integer malesuada nunc vel risus commodo viverra. Adipiscing enim eu turpis egestas pretium. Euismod elementum nisi quis eleifend quam adipiscing. In hac habitasse platea dictumst vestibulum. Sagittis purus sit amet volutpat. Netus et malesuada fames ac turpis egestas. Eget magna fermentum iaculis eu non diam phasellus vestibulum lorem. Varius sit amet mattis vulputate enim. Habitasse platea dictumst quisque sagittis. Integer quis auctor elit sed vulputate mi. Dictumst quisque sagittis purus sit amet.
 

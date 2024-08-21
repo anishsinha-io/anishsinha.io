@@ -2,8 +2,16 @@
 import BaseHead from "~/components/BaseHead.astro";
 import Header from "~/components/Header.astro";
 import Footer from "~/components/Footer.astro";
+import FormattedDate from "~/components/FormattedDate.astro";
 import { SITE_TITLE, SITE_DESCRIPTION } from "~/consts";
 import "~/styles/global.css";
+
+import { getCollection } from "astro:content";
+import { Separator } from "~/components/ui/separator";
+
+const posts = (await getCollection("blog")).sort(
+  (a, b) => b.data.pubDate.valueOf() - a.data.pubDate.valueOf(),
+);
 ---
 
 <!doctype html>
@@ -12,14 +20,38 @@ import "~/styles/global.css";
     <BaseHead title={SITE_TITLE} description={SITE_DESCRIPTION} />
   </head>
   <body class="text-midnight font-main dark:bg-midnight dark:text-offwhite">
-    <div class="flex flex-col gap-4 items-center h-screen">
-      <Header />
-      <main class="flex flex-col flex-1 gap-2 items-center">
-        <div class="flex items-center h-full text-xl max-w-[30rem]">
+    <Header />
+    <div
+      class="flex flex-col gap-4 items-center h-screen xs:w-[90%] sm:w-[80%] md:w-[75%] lg:w-[62.5%] xl:w-[57.5%] mx-auto"
+    >
+      <main class="flex flex-col flex-1 gap-2 items-center w-full">
+        <div class="flex items-center h-full text-xl">
           <div class="flex flex-col gap-4">
             <p class="text-center">Hey, I'm Anish. I'm a software engineer.</p>
-            <div class="flex gap-2 justify-center p-2 text-lg max-w-[30rem]">
-              <a href="/code">Code</a>
+            <div class="flex gap-2 justify-center p-2 mx-auto text-lg">
+              <div class="flex flex-col gap-4">
+                <h2 class="text-xl">Blog</h2>
+                <Separator
+                  className="border border-space dark:border-offwhite"
+                />
+                <ul class="flex flex-col w-full">
+                  {
+                    posts.map((post) => (
+                      <li class="flex flex-1 gap-2 min-w-full">
+                        <a
+                          href={`/blog/${post.slug}/`}
+                          class="flex gap-4 justify-between w-full"
+                        >
+                          <h4 class="underline">{post.data.title}</h4>
+                          <p class="justify-self-end text-mediumgray">
+                            <FormattedDate date={post.data.pubDate} />
+                          </p>
+                        </a>
+                      </li>
+                    ))
+                  }
+                </ul>
+              </div>
             </div>
           </div>
         </div>
