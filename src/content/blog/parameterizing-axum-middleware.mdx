@@ -1,29 +1,169 @@
 ---
 title: "Parameterizing Axum Middleware"
-description: ""
-pubDate: "Aug 20 2024"
+description: "Implementing parameterizable middleware in Axum using from_fn_with_state and pinning boxed futures."
+pubDate: "Aug 21 2024"
 tags:
   - rust
   - axum
 ---
 
-```rust title="src/main.rs" collapse={1-16} ins={18-28}
+Pantheon is a project at Develop for Good that I've been working on for a while now. It's an app which centralizes all our data sources and provides ways to take actions on the data that the providers of the data can't. For example, we use the Google Workspace nonprofits plan to manage our volunteers and the volunteer applications are received on Airtable, and need to be able to conveniently batch export from Airtable into Workspace. This is a type of service that Pantheon provides.
+
+<br />
+
+Pantheon is written in Rust and uses Axum to do the heavy lifting on tasks like routing, subrouting, and extraction of parameters. It also provides a few ways to inject custom middleware. The `middleware::from_fn` and `middleware::from_fn_with_state` allow the generation of middleware by passing a function which resolves to a future, or some state and a function which resolves to a future respectively. That usage is relatively simple. For example:
+
+```rust title="src/main.rs" collapse={1-10}
+use anyhow::Result;
+use axum::{
+    Router,
+    http,
+    routing::get,
+    response::Response,
+    middleware::{self, Next},
+    extract::Request,
+};
+use tokio::net::TcpListener;
+
+async fn some_middleware(
+    request: Request,
+    next: Next,
+) -> Response {
+    // do something with `request`...
+
+    let response = next.run(request).await;
+
+    // do something with `response`...
+
+    response
+}
+
+async fn main() -> Result<()> {
+  let app = Router::new()
+      .route("/", get(|| async { /* ... */ }))
+      .layer(middleware::from_fn(my_middleware));
+
+    let listener = TcpListener::bind(addr).await?;
+
+    axum::serve(listener, srv).await?;
+
+    Ok(())
+}
+```
+
+The code block above showcases how you can generate middleware using `from_fn`. The `from_fn_with_state` function is the exact same, except you pass an additional state parameter into the function that the middleware gets access to.
+
+<br />
+
+The difficulty arises when you need to partially apply the middleware. Let's discuss this with the example of authentication middleware. At Develop for Good, we have different positions, including volunteers, product leads, and the management team. All of them, in addition to our clients, have access to some parts of Pantheon. Additionally, the roles that we have are not _stable_. As a young organization we will likely add more roles or remove some. Building role based authentication, then, requires flexibility.
+
+The base of our authentication middleware might look like:
+
+```rust title="src/middleware.rs" collapse={1-11}
+use axum::{
+    extract::{Request, State},
+    middleware::Next,
+};
+
+use axum_extra::{
+    headers::{authorization::Bearer, Authorization},
+    TypedHeader,
+};
+
+use crate::app::context::Context;
+
+pub async fn auth(
+    // Some opaque app state that we extract. In pantheon we store an authenticator implementation in `Context`
+    State(ctx): State<Arc<Context>>,
+    header: TypedHeader<Authorization<Bearer>>,
+    mut request: Request,
+    next: Next,
+) -> Response {
+    // authenticate the user using the JWT in `header` and get the user data.
+
+    // let data = <result of authentication if successful>
+    // insert data into request (request.extensions_mut.insert(/*...*/))
+
+    let response = next.run(request).await;
+
+
+    response
+}
+```
+
+This authentication middleware extracts some state, the JWT from the request, the request, and the remainder of the middleware stack (`next`). It doesn't do any analysis on the user's roles (presumably contained in the token's data). The issue is, the authentication middleware is called before the endpoint is reached. Each endpoint may differ in the type of user allowed to call it. We could duplicate the code (or generate it at compile) for each function. For example, we could write/generate functions called `volunteer_guard`, `product_lead_guard`, `management_guard`, but this gets messy, and it doesn't handle the combinations between roles. It would be ideal if we could supply some list of roles to the authentication middleware and it would just use those to do the role checking part of the authentication process. The new authentication middleware might look like:
+
+```rust title="src/middleware.rs" collapse={1-11}
+use axum::{
+    extract::{Request, State},
+    middleware::Next,
+};
+
+use axum_extra::{
+    headers::{authorization::Bearer, Authorization},
+    TypedHeader,
+};
+
+use crate::app::context::Context;
+
 pub async fn rbac(
+    // Some opaque app state that we extract. In pantheon we store an authenticator implementation in `Context`
     State(ctx): State<Arc<Context>>,
     header: TypedHeader<Authorization<Bearer>>,
     mut request: Request,
     next: Next,
     roles: Vec<String>,
-) -> Result<impl IntoResponse, AppError> {
-    let authenticator = &ctx.authenticator;
-    let token = header.0.token();
+) -> Response {
+    // authenticate the user using the JWT in `header` and get the user data.
+    // let data = <result of authentication if successful>
 
-    log::info!("{}\n{:?}", token, roles);
-    let data = authenticator.authenticate(token).await?;
+    // Analyze the roles in `data` against the roles passed into rbac. If it doesn't contain them, error with a 403
 
-    request.extensions_mut().insert(data);
-    Ok(next.run(request).await)
+    // insert data into request (request.extensions_mut.insert(/*...*/))
+
+    let response = next.run(request).await;
+
+
+    response
 }
+```
+
+However, we can't extract `roles` and we also don't have a way to parameterize it in its current form. Axum's `from_fn` and `from_fn_with_state` take the function you want to turn into middleware, not the result of that function. Basically, we need a function which returns a partially applied middleware. The way you can do this is as follows:
+
+```rust title="src/middleware.rs" collapse={1-33} ins={35-45}
+use axum::{
+    extract::{Request, State},
+    middleware::Next,
+};
+
+use axum_extra::{
+    headers::{authorization::Bearer, Authorization},
+    TypedHeader,
+};
+
+use crate::app::context::Context;
+
+pub async fn rbac(
+    // Some opaque app state that we extract. In pantheon we store an authenticator implementation in `Context`
+    State(ctx): State<Arc<Context>>,
+    header: TypedHeader<Authorization<Bearer>>,
+    mut request: Request,
+    next: Next,
+    roles: Vec<String>,
+) -> Response {
+    // authenticate the user using the JWT in `header` and get the user data.
+    // let data = <result of authentication if successful>
+
+    // Analyze the roles in `data` against the roles passed into rbac. If it doesn't contain them, error with a 403
+
+    // insert data into request (request.extensions_mut.insert(/*...*/))
+
+    let response = next.run(request).await;
+
+
+    response
+}
+
 
 pub async fn make_rbac(
     roles: Vec<String>,
@@ -32,22 +172,114 @@ pub async fn make_rbac(
     TypedHeader<Authorization<Bearer>>,
     Request,
     Next,
-) -> Pin<Box<dyn Future<Output = Result<impl IntoResponse, AppError>> + Send + 'static>>
+) -> Pin<Box<dyn Future<Output = Result<impl IntoResponse, AppError>> + Send>>
        + Clone {
     move |state, header, request, next| Box::pin(rbac(state, header, request, next, roles.clone()))
 }
 ```
 
-$$
-\int_{0}^{\infty} x^{2} e^{-x} \, dx = \sum_{n=1}^{\infty} \frac{(-1)^{n+1}}{n} \left(\frac{2\pi i n}{\lambda}\right)^{k} \exp\left(-\frac{2\pi i n x_{0}}{\lambda}\right) \times \frac{\Gamma\left(\frac{k+1}{2}\right)}{\Gamma\left(\frac{k}{2}\right)}
-$$
+This took me a while to figure out, and I want to break it down.
 
-Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Vitae ultricies leo integer malesuada nunc vel risus commodo viverra. Adipiscing enim eu turpis egestas pretium. Euismod elementum nisi quis eleifend quam adipiscing. In hac habitasse platea dictumst vestibulum. Sagittis purus sit amet volutpat. Netus et malesuada fames ac turpis egestas. Eget magna fermentum iaculis eu non diam phasellus vestibulum lorem. Varius sit amet mattis vulputate enim. Habitasse platea dictumst quisque sagittis. Integer quis auctor elit sed vulputate mi. Dictumst quisque sagittis purus sit amet.
+<br />
 
-Morbi tristique senectus et netus. Id semper risus in hendrerit gravida rutrum quisque non tellus. Habitasse platea dictumst quisque sagittis purus sit amet. Tellus molestie nunc non blandit massa. Cursus vitae congue mauris rhoncus. Accumsan tortor posuere ac ut. Fringilla urna porttitor rhoncus dolor. Elit ullamcorper dignissim cras tincidunt lobortis. In cursus turpis massa tincidunt dui ut ornare lectus. Integer feugiat scelerisque varius morbi enim nunc. Bibendum neque egestas congue quisque egestas diam. Cras ornare arcu dui vivamus arcu felis bibendum. Dignissim suspendisse in est ante in nibh mauris. Sed tempus urna et pharetra pharetra massa massa ultricies mi.
+The `make_rbac` function takes some vector of roles and returns a function. That function takes some Axum State parameterized by an atomically reference counting smart pointer wrapping the context or state we want to be available, the authorization header of form &quot;Bearer &lt;token&gt;&quot;, the request object, and the remainder of the middleware stack. The function then returns a _pinned, boxed_ future object which will resolve to a result of either something which implements `IntoResponse` or an AppError. AppError is just an error struct that we use in Pantheon. the `Send` bound is necessary for the future to be sendable across threads, and the Clone bound is required by Axum. This function body is one line; all it does is take ownership of the variables and return a pinned future. It parameterizes `rbac` by passing in the roles.
 
-Mollis nunc sed id semper risus in. Convallis a cras semper auctor neque. Diam sit amet nisl suscipit. Lacus viverra vitae congue eu consequat ac felis donec. Egestas integer eget aliquet nibh praesent tristique magna sit amet. Eget magna fermentum iaculis eu non diam. In vitae turpis massa sed elementum. Tristique et egestas quis ipsum suspendisse ultrices. Eget lorem dolor sed viverra ipsum. Vel turpis nunc eget lorem dolor sed viverra. Posuere ac ut consequat semper viverra nam. Laoreet suspendisse interdum consectetur libero id faucibus. Diam phasellus vestibulum lorem sed risus ultricies tristique. Rhoncus dolor purus non enim praesent elementum facilisis. Ultrices tincidunt arcu non sodales neque. Tempus egestas sed sed risus pretium quam vulputate. Viverra suspendisse potenti nullam ac tortor vitae purus faucibus ornare. Fringilla urna porttitor rhoncus dolor purus non. Amet dictum sit amet justo donec enim.
+Now it can be used as follows:
 
-Mattis ullamcorper velit sed ullamcorper morbi tincidunt. Tortor posuere ac ut consequat semper viverra. Tellus mauris a diam maecenas sed enim ut sem viverra. Venenatis urna cursus eget nunc scelerisque viverra mauris in. Arcu ac tortor dignissim convallis aenean et tortor at. Curabitur gravida arcu ac tortor dignissim convallis aenean et tortor. Egestas tellus rutrum tellus pellentesque eu. Fusce ut placerat orci nulla pellentesque dignissim enim sit amet. Ut enim blandit volutpat maecenas volutpat blandit aliquam etiam. Id donec ultrices tincidunt arcu. Id cursus metus aliquam eleifend mi.
+```rust title="src/main.rs" collapse={1-46} ins={49,55}
+use axum::{
+    extract::{Request, State},
+    middleware::Next,
+};
 
-Tempus quam pellentesque nec nam aliquam sem. Risus at ultrices mi tempus imperdiet. Id porta nibh venenatis cras sed felis eget velit. Ipsum a arcu cursus vitae. Facilisis magna etiam tempor orci eu lobortis elementum. Tincidunt dui ut ornare lectus sit. Quisque non tellus orci ac. Blandit libero volutpat sed cras. Nec tincidunt praesent semper feugiat nibh sed pulvinar proin gravida. Egestas integer eget aliquet nibh praesent tristique magna.
+use axum_extra::{
+    headers::{authorization::Bearer, Authorization},
+    TypedHeader,
+};
+
+use crate::app::context::Context;
+
+pub async fn rbac(
+    // Some opaque app state that we extract. In pantheon we store an authenticator implementation in `Context`
+    State(ctx): State<Arc<Context>>,
+    header: TypedHeader<Authorization<Bearer>>,
+    mut request: Request,
+    next: Next,
+    roles: Vec<String>,
+) -> Response {
+    // authenticate the user using the JWT in `header` and get the user data.
+    // let data = <result of authentication if successful>
+
+    // Analyze the roles in `data` against the roles passed into rbac. If it doesn't contain them, error with a 403
+
+    // insert data into request (request.extensions_mut.insert(/*...*/))
+
+    let response = next.run(request).await;
+
+
+    response
+}
+
+
+pub async fn make_rbac(
+    roles: Vec<String>,
+) -> impl Fn(
+    State<Arc<Context>>,
+    TypedHeader<Authorization<Bearer>>,
+    Request,
+    Next,
+) -> Pin<Box<dyn Future<Output = Result<impl IntoResponse, AppError>> + Send>>
+       + Clone {
+    move |state, header, request, next| Box::pin(rbac(state, header, request, next, roles.clone()))
+}
+
+async fn main() -> Result<()> {
+
+  let rbac = make_rbac(vec!["admin".to_string()]).await;
+
+  let ctx = Context { /*...*/ };
+
+  let app = Router::new()
+      .route("/", get(|| async { /* ... */ }))
+      .route_layer(middleware::from_fn_with_state(ctx.clone(), my_middleware))
+      .with_state(ctx);
+
+    let listener = TcpListener::bind(addr).await?;
+
+    axum::serve(listener, srv).await?;
+
+    Ok(())
+}
+```
+
+Lastly, this is the AppError struct we use at Pantheon. It just wraps an `anyhow::Error`.
+
+```rust title="src/errors.rs"
+//! Generic error constructs to use for API error reponses
+
+use anyhow::Error;
+use axum::http::StatusCode;
+use axum::response::{IntoResponse, Response};
+
+// This just takes a status code and some JSON body and turns it into an Axum response
+use crate::app::api_response;
+
+/// A generic app error sent by all handlers on failure
+pub struct AppError(Error);
+
+impl IntoResponse for AppError {
+    fn into_response(self) -> Response {
+        log::error!("{}", self.0.to_string());
+        api_response::error(StatusCode::INTERNAL_SERVER_ERROR, "Something went wrong!")
+    }
+}
+
+impl<E> From<E> for AppError
+where
+    E: Into<Error>,
+{
+    fn from(err: E) -> Self {
+        Self(err.into())
+    }
+}
+```

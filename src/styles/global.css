@@ -56,3 +56,10 @@ body {
     font-size: 0.65rem;
   }
 }
+
+code {
+  font-size: 1rem;
+  border-radius: 0.3rem;
+  background-color: #d3d3d3;
+  color: #061826;
+}
