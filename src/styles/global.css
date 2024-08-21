@@ -2,23 +2,16 @@
 @tailwind components;
 @tailwind utilities;
 
-.astro-code {
-  padding: 1rem;
-  border-radius: 0.5rem;
-  font-size: 0.75rem;
+.expressive-code {
+  margin-top: 2rem;
+  margin-bottom: 2rem;
 }
 
-code {
-  counter-reset: step;
-  counter-increment: step 0;
-}
-
-code .line::before {
-  content: counter(step);
-  counter-increment: step;
-  width: 1.5rem;
-  margin-right: 1.5rem;
+/* to center mathematical formulas */
+.katex {
+  text-align: center;
   display: inline-block;
-  text-align: right;
-  color: rgba(115, 138, 148, 0.4);
+  width: 100%;
+  margin-top: 0.5rem;
+  margin-bottom: 0.5rem;
 }
