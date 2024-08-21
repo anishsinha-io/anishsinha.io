@@ -11,7 +11,7 @@ Pantheon is a project at Develop for Good that I've been working on for a while 
 
 <br />
 
-Pantheon is written in Rust and uses Axum to do the heavy lifting on tasks like routing, subrouting, and extraction of parameters. It also provides a few ways to inject custom middleware. The `middleware::from_fn` and `middleware::from_fn_with_state` allow the generation of middleware by passing a function which resolves to a future, or some state and a function which resolves to a future respectively. That usage is relatively simple. For example:
+Pantheon is written in Rust and uses Axum to do the heavy lifting on tasks like routing, subrouting, and extraction of parameters. It also provides a few ways to inject custom middleware. The `middleware::from_fn` and `middleware::from_fn_with_state` functions in the `axum::middleware` module allow the generation of middleware by passing a function which resolves to a future, or some state and a function which resolves to a future respectively. That usage is relatively simple. For example:
 
 ```rust title="src/main.rs" collapse={1-10}
 use anyhow::Result;

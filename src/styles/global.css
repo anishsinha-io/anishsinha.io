@@ -59,7 +59,9 @@ body {
 
 code {
   font-size: 1rem;
-  border-radius: 0.3rem;
-  background-color: #d3d3d3;
-  color: #061826;
+  border-radius: 0.4rem;
+  background-color: #1e1e2e;
+  color: #89b4fa;
+  padding-left: 0.15rem;
+  padding-right: 0.15rem;
 }
