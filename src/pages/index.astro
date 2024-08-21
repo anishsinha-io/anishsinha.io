@@ -2,7 +2,7 @@
 import BaseHead from "~/components/BaseHead.astro";
 import Header from "~/components/Header.astro";
 import Footer from "~/components/Footer.astro";
-import FormattedDate from "~/components/FormattedDate.astro";
+import ShortFormattedDate from "~/components/ShortFormattedDate.astro";
 import { SITE_TITLE, SITE_DESCRIPTION } from "~/consts";
 import "~/styles/global.css";
 
@@ -25,11 +25,13 @@ const posts = (await getCollection("blog")).sort(
       class="flex flex-col gap-4 items-center h-screen xs:w-[90%] sm:w-[80%] md:w-[75%] lg:w-[62.5%] xl:w-[57.5%] mx-auto"
     >
       <main class="flex flex-col flex-1 gap-2 items-center w-full">
-        <div class="flex items-center h-full text-xl">
-          <div class="flex flex-col gap-4">
-            <p class="text-center">Hey, I'm Anish. I'm a software engineer.</p>
-            <div class="flex gap-2 justify-center p-2 mx-auto text-lg">
-              <div class="flex flex-col gap-4">
+        <div class="flex flex-1 items-center w-full text-xl">
+          <div class="flex flex-col gap-4 w-full">
+            <h2 class="text-xl text-center md:text-2xl">
+              Hey, I'm Anish. I'm a software engineer.
+            </h2>
+            <div class="flex gap-2 justify-center p-2 mx-auto w-full text-lg">
+              <div class="flex flex-col gap-4 w-full">
                 <h2 class="text-xl">Blog</h2>
                 <Separator
                   className="border border-space dark:border-offwhite"
@@ -46,7 +48,7 @@ const posts = (await getCollection("blog")).sort(
                             {post.data.title}
                           </h4>
                           <p class="justify-self-end text-sm sm:text-lg md:text-xl xs:text-base text-mediumgray">
-                            <FormattedDate date={post.data.pubDate} />
+                            <ShortFormattedDate date={post.data.pubDate} />
                           </p>
                         </a>
                       </li>
