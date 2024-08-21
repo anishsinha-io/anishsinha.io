@@ -2,6 +2,11 @@
 @tailwind components;
 @tailwind utilities;
 
+html,
+body {
+  overflow-x: hidden;
+}
+
 .expressive-code {
   margin-top: 2rem;
   margin-bottom: 2rem;
@@ -19,4 +24,35 @@
 
 .katex-html {
   display: none;
+}
+
+.katex-display {
+  overflow: auto hidden;
+  max-width: 100%;
+}
+
+@media screen and (max-width: 768px) {
+  .katex-display {
+    font-size: 0.9rem;
+  }
+}
+
+@media screen and (max-width: 640px) {
+  .katex {
+    display: block;
+    /* white-space: nowrap; */
+    max-width: 90%;
+    margin: 0 auto;
+    overflow: scroll hidden;
+  }
+
+  .katex-display {
+    font-size: 0.8rem;
+  }
+}
+
+@media screen and (max-width: 480px) {
+  .katex-display {
+    font-size: 0.65rem;
+  }
 }

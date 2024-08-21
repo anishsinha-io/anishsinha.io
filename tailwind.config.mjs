@@ -5,7 +5,7 @@ export default {
   theme: {
     fontFamily: {
       main: ["Catamaran"],
-      mono: ["Martian Mono"],
+      mono: ["JetBrains Mono"],
     },
     screens: {
       xxs: "320px",

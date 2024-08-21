@@ -31,8 +31,8 @@ export default defineConfig({
           editorActiveTabIndicatorBottomColor: ({ theme }) =>
             theme.colors["editorGroup.border"],
         },
-        uiFontFamily: "Martian Mono",
-        codeFontFamily: "Martian Mono",
+        uiFontFamily: "JetBrains Mono",
+        codeFontFamily: "JetBrains Mono",
         uiFontSize: "0.75rem",
         codeFontSize: "0.75rem",
       },
