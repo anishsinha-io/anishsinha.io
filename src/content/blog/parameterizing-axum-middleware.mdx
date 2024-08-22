@@ -11,7 +11,7 @@ Pantheon is a project at Develop for Good that I've been working on for a while 
 
 <br />
 
-Pantheon is written in Rust and uses Axum to do the heavy lifting on tasks like routing, subrouting, and extraction of parameters. It also provides a few ways to inject custom middleware. The `middleware::from_fn` and `middleware::from_fn_with_state` functions in the `axum::middleware` module allow the generation of middleware by passing a function which resolves to a future, or some state and a function which resolves to a future respectively. That usage is relatively simple. For example:
+Pantheon is written in Rust and uses Axum to do the heavy lifting on tasks like routing, subrouting, and extraction of parameters. Axum also provides a few ways to inject custom middleware. The `middleware::from_fn` and `middleware::from_fn_with_state` functions in the `axum::middleware` module allow the generation of middleware by passing a function which resolves to a future, or some state and a function which resolves to a future respectively. That usage is relatively simple. For example (adapted from the Axum docs):
 
 ```rust title="src/main.rs" collapse={1-10}
 use anyhow::Result;
@@ -41,7 +41,7 @@ async fn some_middleware(
 async fn main() -> Result<()> {
   let app = Router::new()
       .route("/", get(|| async { /* ... */ }))
-      .layer(middleware::from_fn(my_middleware));
+      .layer(middleware::from_fn(some_middleware));
 
     let listener = TcpListener::bind(addr).await?;
 
@@ -55,9 +55,9 @@ The code block above showcases how you can generate middleware using `from_fn`. 
 
 <br />
 
-The difficulty arises when you need to partially apply the middleware. Let's discuss this with the example of authentication middleware. At Develop for Good, we have different positions, including volunteers, product leads, and the management team. All of them, in addition to our clients, have access to some parts of Pantheon. Additionally, the roles that we have are not _stable_. As a young organization we will likely add more roles or remove some. Building role based authentication, then, requires flexibility.
+The difficulty arises when you need to partially apply the middleware. Let's discuss this with the example of authentication middleware. At Develop for Good, we have different positions, including volunteers, product leads, management team members. All of them, in addition to our clients, have access to some parts of Pantheon. Additionally, the roles that we have are not _stable_. As a young organization we will likely add more roles or remove some. Building role based authentication, then, requires flexibility.
 
-The base of our authentication middleware might look like:
+The base of our authentication middleware (without role-based access control capabilities) might look like:
 
 ```rust title="src/middleware.rs" collapse={1-11}
 use axum::{
@@ -91,7 +91,7 @@ pub async fn auth(
 }
 ```
 
-This authentication middleware extracts some state, the JWT from the request, the request, and the remainder of the middleware stack (`next`). It doesn't do any analysis on the user's roles (presumably contained in the token's data). The issue is, the authentication middleware is called before the endpoint is reached. Each endpoint may differ in the type of user allowed to call it. We could duplicate the code (or generate it at compile) for each function. For example, we could write/generate functions called `volunteer_guard`, `product_lead_guard`, `management_guard`, but this gets messy, and it doesn't handle the combinations between roles. It would be ideal if we could supply some list of roles to the authentication middleware and it would just use those to do the role checking part of the authentication process. The new authentication middleware might look like:
+This authentication middleware extracts some state, the JWT from the request, the request, and the remainder of the middleware stack (`next`). It doesn't do any analysis on the user's roles (presumably contained in the token's data). The issue is, the authentication middleware is called before the endpoint is reached. Each endpoint may differ in the type of user allowed to call it. We could duplicate the code (or generate it at compile time using procedural macros) for each function. For example, we could write/generate functions called `volunteer_guard`, `product_lead_guard`, `management_guard`, but this gets messy, and it doesn't handle the combinations between roles. It would be ideal if we could supply some list of roles to the authentication middleware and it would just use those to do the role checking part of the authentication process. The new authentication middleware might look like:
 
 ```rust title="src/middleware.rs" collapse={1-11}
 use axum::{
@@ -128,7 +128,7 @@ pub async fn rbac(
 }
 ```
 
-However, we can't extract `roles` and we also don't have a way to parameterize it in its current form. Axum's `from_fn` and `from_fn_with_state` take the function you want to turn into middleware, not the result of that function. Basically, we need a function which returns a partially applied middleware. The way you can do this is as follows:
+However, we can't extract `roles` and we also don't have a way to parameterize it in its current form. Axum's `from_fn` and `from_fn_with_state` take the function you want to turn into middleware, not the result of that function. Basically, we need a function which takes some roles and returns a partially applied middleware by calling it with that roles value. The way you can do this is as follows:
 
 ```rust title="src/middleware.rs" collapse={1-33} ins={35-45}
 use axum::{
@@ -182,7 +182,7 @@ This took me a while to figure out, and I want to break it down.
 
 <br />
 
-The `make_rbac` function takes some vector of roles and returns a function. That function takes some Axum State parameterized by an atomically reference counting smart pointer wrapping the context or state we want to be available, the authorization header of form &quot;Bearer &lt;token&gt;&quot;, the request object, and the remainder of the middleware stack. The function then returns a _pinned, boxed_ future object which will resolve to a result of either something which implements `IntoResponse` or an AppError. AppError is just an error struct that we use in Pantheon. the `Send` bound is necessary for the future to be sendable across threads, and the Clone bound is required by Axum. This function body is one line; all it does is take ownership of the variables and return a pinned future. It parameterizes `rbac` by passing in the roles.
+The `make_rbac` function takes some vector of roles and returns a function. That function takes some Axum State parameterized by an atomically reference counting smart pointer wrapping the context or state we want to be available, the authorization header of form &quot;Bearer &lt;token&gt;&quot;, the request object, and the remainder of the middleware stack. The function then returns a _pinned, boxed_ future object which will resolve to a result of either something which implements `IntoResponse` or an AppError. AppError is just an error struct that we use in Pantheon. Futures are self-referential in rust so that they can be polled, so _pinning_ it is necessary to make it immovable. The `Send` bound is necessary for the future to be sendable across threads, and the Clone bound is required by Axum. This function body is one line; all it does is take ownership of the variables and return a pinned future. It parameterizes `rbac` by passing in the roles.
 
 Now it can be used as follows:
 
@@ -235,13 +235,13 @@ pub async fn make_rbac(
 
 async fn main() -> Result<()> {
 
-  let rbac = make_rbac(vec!["admin".to_string()]).await;
+  let admin_rbac = make_rbac(vec!["admin".to_string()]).await;
 
   let ctx = Context { /*...*/ };
 
   let app = Router::new()
       .route("/", get(|| async { /* ... */ }))
-      .route_layer(middleware::from_fn_with_state(ctx.clone(), my_middleware))
+      .route_layer(middleware::from_fn_with_state(ctx.clone(), admin_rbac))
       .with_state(ctx);
 
     let listener = TcpListener::bind(addr).await?;

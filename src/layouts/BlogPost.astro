@@ -3,11 +3,12 @@ import type { CollectionEntry } from "astro:content";
 import BaseHead from "~/components/BaseHead.astro";
 import Header from "~/components/Header.astro";
 import Footer from "~/components/Footer.astro";
+import { Badge } from "~/components/ui/badge";
 import FormattedDate from "~/components/FormattedDate.astro";
 
 type Props = CollectionEntry<"blog">["data"];
 
-const { title, description, pubDate } = Astro.props;
+const { title, description, pubDate, tags } = Astro.props;
 ---
 
 <html lang="en">
@@ -33,7 +34,18 @@ const { title, description, pubDate } = Astro.props;
             </div>
           </div>
           <slot />
-          <p class="mt-2 text-right">-A</p>
+          <div class="flex gap-2 justify-end">
+            <!-- <p>Tags:</p> -->
+            <div class="flex gap-2 justify-end">
+              {
+                tags.map((tag) => (
+                  <Badge className="bg-midnight text-offwhite dark:bg-offwhite dark:text-midnight">
+                    {tag}
+                  </Badge>
+                ))
+              }
+            </div>
+          </div>
         </div>
       </article>
     </main>

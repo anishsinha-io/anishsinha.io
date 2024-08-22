@@ -64,17 +64,19 @@ const { title, description, image = "/opengraph-img.png" } = Astro.props;
 <meta property="twitter:description" content={description} />
 <meta property="twitter:image" content={new URL(image, Astro.url)} />
 
-<!-- <script is:inline> -->
-<!--   (() => { -->
-<!--     let theme = !!localStorage.getItem("darkMode") ? "dark" : "light"; -->
-<!--     document.documentElement.dataset.theme = theme; -->
-<!--   })(); -->
-<!-- </script> -->
-
 <ViewTransitions transition:animate="initial" />
+
 <script is:inline>
   document.addEventListener("astro:after-swap", function () {
-    let darkMode = !!localStorage.getItem("darkMode");
-    if (darkMode) document.documentElement.dataset.theme = "dark";
+    let darkMode = localStorage.getItem("darkMode");
+    if (darkMode && darkMode === "true")
+      document.documentElement.dataset.theme = "dark";
   });
 </script>
+
+<!-- <script is:inline> -->
+<!--   document.addEventListener("astro:after-swap", function () { -->
+<!--     let darkMode = !!localStorage.getItem("darkMode"); -->
+<!--     if (darkMode) document.documentElement.dataset.theme = "dark"; -->
+<!--   }); -->
+<!-- </script> -->
