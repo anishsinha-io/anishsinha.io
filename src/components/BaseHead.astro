@@ -1,6 +1,4 @@
 ---
-// Import the global.css file here so that it is included on
-// all pages through the use of the <BaseHead /> component.
 import "~/styles/global.css";
 import { ViewTransitions } from "astro:transitions";
 
@@ -66,11 +64,17 @@ const { title, description, image = "/opengraph-img.png" } = Astro.props;
 <meta property="twitter:description" content={description} />
 <meta property="twitter:image" content={new URL(image, Astro.url)} />
 
-<script is:inline>
-  (() => {
-    let theme = !!localStorage.getItem("darkMode") ? "dark" : "light";
-    document.documentElement.dataset.theme = theme;
-  })();
-</script>
+<!-- <script is:inline> -->
+<!--   (() => { -->
+<!--     let theme = !!localStorage.getItem("darkMode") ? "dark" : "light"; -->
+<!--     document.documentElement.dataset.theme = theme; -->
+<!--   })(); -->
+<!-- </script> -->
 
-<ViewTransitions fallback="swap" />
+<ViewTransitions transition:animate="initial" />
+<script is:inline>
+  document.addEventListener("astro:after-swap", function () {
+    let darkMode = !!localStorage.getItem("darkMode");
+    if (darkMode) document.documentElement.dataset.theme = "dark";
+  });
+</script>
