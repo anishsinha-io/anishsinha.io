@@ -4,8 +4,3 @@
 export const SITE_TITLE = "// anishsinha.io";
 export const SITE_DESCRIPTION =
   "A blog about software development and other things.";
-
-export const TAG_COLORS: { [key: string]: string } = {
-  rust: "#E43717",
-  axum: "#133955 ",
-};
