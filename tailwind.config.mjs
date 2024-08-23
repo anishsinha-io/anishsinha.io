@@ -21,9 +21,7 @@ export default {
         offwhite: "#f9f9f9",
         mediumgray: "#5C5D67",
         midnight: "#121214",
-        space: "#061826",
       },
     },
   },
-  // plugins: [],
 };
