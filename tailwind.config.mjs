@@ -3,6 +3,19 @@ export default {
   darkMode: ["selector", "[data-theme='dark']"],
   content: ["./src/**/*.{astro,html,js,jsx,md,mdx,svelte,ts,tsx,vue}"],
   theme: {
+    typography: {
+      // DEFAULT: {
+      //   css: {
+      //     p: {},
+      //     ul: {
+      //       listStyleType: "disc",
+      //     },
+      //     "ul > li::marker": {
+      //       color: "var(--tw-prose-bullets)",
+      //     },
+      //   },
+      // },
+    },
     fontFamily: {
       main: ["Catamaran"],
       mono: ["JetBrains Mono"],
@@ -24,4 +37,5 @@ export default {
       },
     },
   },
+  plugins: [require("@tailwindcss/typography")],
 };

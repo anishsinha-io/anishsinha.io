@@ -1,0 +1,164 @@
+---
+title: "Using C++ Bindings to Raylib"
+description: "Getting up and running with game development using Raylib's C++ bindings"
+pubDate: "September 3 2024"
+tags:
+  - raylib
+  - c++
+  - gamedev
+---
+
+Raylib is a great game engine, but by default it only exposes a C API, and generally, C is not that productive to work in as it's really hard to build meaningful abstractions, it lacks a featureful standard library, and many quality of life features such as cross-platform threading, a solid collections library, smart pointers, and RAII (I could go on). Being unable to write in any paradigm but imperative is annoying as well. Luckily, there are many bindings for other languages that abstract over the C API for you. The [C++ bindings](https://github.com/RobLoach/raylib-cpp/tree/master) seem feature complete, and, because of backwards compatibility, you can just tap into the C API or write your own abstractions if something doesn't work the way you need it to. Here's how you can get setup with them.
+
+<br />
+
+## Using C++ For Fun and For Profit™
+
+<br />
+
+In order to work with the C++ bindings, you first need to install raylib as a dependency. There are different ways to do this, but I prefer to use CMake with FetchContent. The below code is adapted from the [official linked example](https://github.com/raysan5/raylib/blob/master/projects/CMake/CMakeLists.txt) in the documentation.
+
+```cmake title="CMakeLists.txt"
+cmake_minimum_required(VERSION 3.11) # FetchContent is available in 3.11+
+project(example)
+
+set(CMAKE_CXX_STANDARD 17)
+
+set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
+
+# Dependencies
+set(RAYLIB_VERSION 5.0)
+find_package(raylib ${RAYLIB_VERSION} QUIET) # QUIET or REQUIRED
+if (NOT raylib_FOUND) # If there's none, fetch and build raylib
+  include(FetchContent)
+  FetchContent_Declare(
+    raylib
+    DOWNLOAD_EXTRACT_TIMESTAMP OFF
+    URL https://github.com/raysan5/raylib/archive/refs/tags/${RAYLIB_VERSION}.tar.gz
+  )
+  FetchContent_GetProperties(raylib)
+  if (NOT raylib_POPULATED) # Have we downloaded raylib yet?
+    set(FETCHCONTENT_QUIET NO)
+    FetchContent_MakeAvailable(raylib)
+    set(BUILD_EXAMPLES OFF CACHE BOOL "" FORCE) # don't build the supplied examples
+  endif()
+endif()
+
+# Our Project
+
+add_executable(${PROJECT_NAME} main.cc)
+target_link_libraries(${PROJECT_NAME} raylib)
+
+# Web Configurations
+if (${PLATFORM} STREQUAL "Web")
+    # Tell Emscripten to build an example.html file.
+    set_target_properties(${PROJECT_NAME} PROPERTIES SUFFIX ".html")
+endif()
+
+# Checks if OSX and links appropriate frameworks (Only required on MacOS)
+if (APPLE)
+    target_link_libraries(${PROJECT_NAME} "-framework CoreVideo")
+    target_link_libraries(${PROJECT_NAME} "-framework IOKit")
+    target_link_libraries(${PROJECT_NAME} "-framework Cocoa")
+    target_link_libraries(${PROJECT_NAME} "-framework OpenGL")
+    target_link_libraries(${PROJECT_NAME} "-framework GLUT")
+endif()
+```
+
+To add `raylib-cpp` as a dependency and to be able to `#include <raylib-cpp.hpp>`, you'll need to add the following to your `CMakeLists.txt`
+
+```cmake title="CMakeLists.txt" ins={27-32,39,56-60}
+cmake_minimum_required(VERSION 3.11) # FetchContent is available in 3.11+
+project(example)
+
+set(CMAKE_CXX_STANDARD 17)
+
+# Generate compile_commands.json
+set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
+
+# Dependencies
+set(RAYLIB_VERSION 5.0)
+find_package(raylib ${RAYLIB_VERSION} QUIET) # QUIET or REQUIRED
+if (NOT raylib_FOUND) # If there's none, fetch and build raylib
+  include(FetchContent)
+  FetchContent_Declare(
+    raylib
+    DOWNLOAD_EXTRACT_TIMESTAMP OFF
+    URL https://github.com/raysan5/raylib/archive/refs/tags/${RAYLIB_VERSION}.tar.gz
+  )
+  FetchContent_GetProperties(raylib)
+  if (NOT raylib_POPULATED) # Have we downloaded raylib yet?
+    set(FETCHCONTENT_QUIET NO)
+    FetchContent_MakeAvailable(raylib)
+    set(BUILD_EXAMPLES OFF CACHE BOOL "" FORCE) # don't build the supplied examples
+  endif()
+endif()
+
+FetchContent_Declare(
+  raylib-cpp
+  GIT_REPOSITORY https://github.com/RobLoach/raylib-cpp.git
+  GIT_TAG        master # or specify a specific tag/commit if needed
+)
+FetchContent_MakeAvailable(raylib-cpp)
+
+# Our Project
+
+add_executable(${PROJECT_NAME} main.cc)
+#set(raylib_VERBOSE 1)
+target_link_libraries(${PROJECT_NAME} raylib)
+target_include_directories(${PROJECT_NAME} PRIVATE ${raylib-cpp_SOURCE_DIR}/include)
+
+# Web Configurations
+if (${PLATFORM} STREQUAL "Web")
+    # Tell Emscripten to build an example.html file.
+    set_target_properties(${PROJECT_NAME} PROPERTIES SUFFIX ".html")
+endif()
+
+# Checks if OSX and links appropriate frameworks (Only required on MacOS)
+if (APPLE)
+    target_link_libraries(${PROJECT_NAME} "-framework CoreVideo")
+    target_link_libraries(${PROJECT_NAME} "-framework IOKit")
+    target_link_libraries(${PROJECT_NAME} "-framework Cocoa")
+    target_link_libraries(${PROJECT_NAME} "-framework OpenGL")
+    target_link_libraries(${PROJECT_NAME} "-framework GLUT")
+endif()
+
+add_custom_target(app
+    COMMAND example
+    DEPENDS example
+    COMMENT "Running app"
+)
+```
+
+Lines 27-31 fetch `raylib-cpp` the master branch of the GitHub repository (although you should probably specify a tag), and line 32 makes the library available. Line 39 allows you to `#include <raylib-cpp.hpp>` so you can use the C++ API. The last 5 lines just add a custom target called `app` so you can run `cmake --build build --target app` and have it automatically build and run your app. That's just for convenience. If you've done everything correctly, then put the following in your `main.cc`/`main.cpp`
+
+```c++ title="main.cc"
+#include <raylib-cpp.hpp>
+
+int main() {
+    int screenWidth = 800;
+    int screenHeight = 450;
+
+    raylib::Window window(screenWidth, screenHeight,
+                          "raylib-cpp - basic window");
+
+    SetTargetFPS(60);
+
+    while (!window.ShouldClose()) {
+        window.BeginDrawing();
+
+        window.ClearBackground(raylib::Color::RayWhite());
+
+        raylib::DrawText("Congrats! You created your first window!", 190, 200,
+                         20, LIGHTGRAY);
+
+        window.EndDrawing();
+    }
+
+    return 0;
+}
+```
+
+and run `cmake -B build && cmake --build build --target app` and you should see a window open up. I hope this post was helpful, and ciao for now.
+
+<br />
