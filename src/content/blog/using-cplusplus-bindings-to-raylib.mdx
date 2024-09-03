@@ -18,7 +18,7 @@ Raylib is a great game engine, but by default it only exposes a C API, and gener
 
 In order to work with the C++ bindings, you first need to install raylib as a dependency. There are different ways to do this, but I prefer to use CMake with FetchContent. The below code is adapted from the [official linked example](https://github.com/raysan5/raylib/blob/master/projects/CMake/CMakeLists.txt) in the documentation.
 
-```cmake title="CMakeLists.txt"
+```cmake title="CMakeLists.txt" wrap
 cmake_minimum_required(VERSION 3.11) # FetchContent is available in 3.11+
 project(example)
 
@@ -67,7 +67,7 @@ endif()
 
 To add `raylib-cpp` as a dependency and to be able to `#include <raylib-cpp.hpp>`, you'll need to add the following to your `CMakeLists.txt`
 
-```cmake title="CMakeLists.txt" ins={27-32,39,56-60}
+```cmake title="CMakeLists.txt" ins={27-32,39,56-60} wrap
 cmake_minimum_required(VERSION 3.11) # FetchContent is available in 3.11+
 project(example)
 
@@ -132,15 +132,16 @@ add_custom_target(app
 
 Lines 27-31 fetch `raylib-cpp` the master branch of the GitHub repository (although you should probably specify a tag), and line 32 makes the library available. Line 39 allows you to `#include <raylib-cpp.hpp>` so you can use the C++ API. The last 5 lines just add a custom target called `app` so you can run `cmake --build build --target app` and have it automatically build and run your app. That's just for convenience. If you've done everything correctly, then put the following in your `main.cc`/`main.cpp`
 
-```c++ title="main.cc"
+and run `cmake -B build && cmake --build build --target app` and you should see a window open up. I hope this post was helpful, and ciao for now.
+
+```cpp title="main.cc"
 #include <raylib-cpp.hpp>
 
 int main() {
     int screenWidth = 800;
     int screenHeight = 450;
 
-    raylib::Window window(screenWidth, screenHeight,
-                          "raylib-cpp - basic window");
+    raylib::Window window(screenWidth, screenHeight, "raylib-cpp - basic window");
 
     SetTargetFPS(60);
 
@@ -149,8 +150,7 @@ int main() {
 
         window.ClearBackground(raylib::Color::RayWhite());
 
-        raylib::DrawText("Congrats! You created your first window!", 190, 200,
-                         20, LIGHTGRAY);
+        raylib::DrawText("Congrats! You created your first window!", 190, 200, 20, LIGHTGRAY);
 
         window.EndDrawing();
     }
@@ -158,7 +158,5 @@ int main() {
     return 0;
 }
 ```
-
-and run `cmake -B build && cmake --build build --target app` and you should see a window open up. I hope this post was helpful, and ciao for now.
 
 <br />
