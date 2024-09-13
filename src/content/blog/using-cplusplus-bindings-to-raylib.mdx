@@ -130,9 +130,7 @@ add_custom_target(app
 )
 ```
 
-Lines 27-31 fetch `raylib-cpp` the master branch of the GitHub repository (although you should probably specify a tag), and line 32 makes the library available. Line 39 allows you to `#include <raylib-cpp.hpp>` so you can use the C++ API. The last 5 lines just add a custom target called `app` so you can run `cmake --build build --target app` and have it automatically build and run your app. That's just for convenience. If you've done everything correctly, then put the following in your `main.cc`/`main.cpp`
-
-and run `cmake -B build && cmake --build build --target app` and you should see a window open up. I hope this post was helpful, and ciao for now.
+Lines 27-31 fetch `raylib-cpp` the master branch of the GitHub repository (although you should probably specify a tag), and line 32 makes the library available. Line 39 allows you to `#include <raylib-cpp.hpp>` so you can use the C++ API. The last 5 lines just add a custom target called `app` so you can run `cmake --build build --target app` and have it automatically build and run your app. That's just for convenience. Now you can put the following in your `main.cc`/`main.cpp`:
 
 ```cpp title="main.cc"
 #include <raylib-cpp.hpp>
@@ -158,5 +156,7 @@ int main() {
     return 0;
 }
 ```
+
+When you run `cmake -B build && cmake --build build --target app`, you should see a window open up. I hope this post was helpful!
 
 <br />
