@@ -1,7 +1,7 @@
 ---
 title: "On Zig as a C++ Build System"
-description: "Testing the capabilities of zig as a build system for C and C++ projects by using it to build a raylib project with C++"
-pubDate: "September 13 2024"
+description: "Testing the capabilities of zig as a build system for C and C++ projects by using it to build a C++ project with raylib, raylib-cpp and GoogleTest"
+pubDate: "September 14 2024"
 tags:
   - raylib
   - c++
@@ -16,43 +16,107 @@ Zig sparks absolutely no interest in me as a _language_, but it does seem like i
 
 <br />
 
-The project I wanted to build is a C++ project which depends on `raylib` and `raylib-cpp`. [Raylib](https://github.com/raysan5/raylib) is basically an abstraction layer over different platform graphics systems, with some convenient APIs for 2D and 3D game development. It's written in C. The raylib-cpp dependency is a header-only C++ library which provides an object-oriented wrapper around the core raylib APIs.
+The project I wanted to build is a small C++ game which depends on `raylib`, `raylib-cpp`, and `googletest`. [Raylib](https://github.com/raysan5/raylib) is basically an abstraction layer over different platform graphics systems, with some convenient APIs for 2D and 3D game development. It's written in C. The raylib-cpp dependency is a header-only C++ library which provides an object-oriented wrapper around the core raylib APIs. [GoogleTest](https://github.com/google/googletest) is a C++ xUnit testing framework, and building it will be an interesting challenge since it's not a header-only library.
 
 <br />
 
-The structure of the project is just three files:
+The structure of the project is pretty straightforward.
 
 ```bash showLineNumbers=false frame="none"
 (root)
 ├── build.zig
 ├── build.zig.zon
-└── main.cc
+├── include
+│   └── game.h
+├── main.cc
+├── src
+│   └── game.cc
+└── test
+    └── main_test.cc
 ```
 
-Put the following in your `main.cc` file. By the end of this post, you should not get any build or IDE errors.
+Add the following code to their respective files. It just sets up a game class with a run method, as well as a single test.
 
 ```c++ title="main.cc"
 #include <raylib-cpp.hpp>
 
-int main(int argc, char **argv) {
-  int screenWidth = 800;
-  int screenHeight = 450;
+#include "game.h"
 
-  raylib::Window window(screenWidth, screenHeight, "raylib-cpp - basic window");
+int main(int argc, char** argv) {
+    using namespace game;
 
-  window.SetTargetFPS(60);
+    Game game(800, 450, "game", 60);
+    game.Run();
 
-  while (!window.ShouldClose()) {
-    window.BeginDrawing();
+    return 0;
+}
+```
 
-    window.ClearBackground(raylib::Color::RayWhite());
+```c++ title="include/game.h"
+#pragma once
 
-    raylib::DrawText("Congrats! You created your first window!", 190, 200, 20, raylib::Color::LightGray());
+#include <filesystem>
+#include <raylib-cpp.hpp>
 
-    window.EndDrawing();
-  }
+namespace game {
 
-  return 0;
+namespace fs = std::filesystem;
+
+class Game {
+public:
+    Game(unsigned int screen_width, unsigned int screen_height,
+         const std::string& title, unsigned int target_fps) noexcept;
+    ~Game() {}
+
+    void Run();
+
+private:
+    static inline fs::path resource_path_ = fs::current_path().parent_path().append("resources");
+    unsigned int   level_ = 1;
+    unsigned int   target_fps_ = 60;
+    unsigned int   screen_width_;
+    unsigned int   screen_height_;
+    std::string    title_ = "Game";
+    raylib::Window window_;
+};
+
+}  // namespace game
+```
+
+```c++ title="src/game.cc"
+#include "game.h"
+
+namespace game {
+
+Game::Game(unsigned int screen_width, unsigned int screen_height, const std::string& title, unsigned int target_fps) noexcept : window_{raylib::Window(screen_width, screen_height, title)} {
+    window_.SetTargetFPS(target_fps);
+}
+
+void Game::Run() {
+    while (!window_.ShouldClose()) {
+        window_.BeginDrawing();
+
+        window_.ClearBackground(raylib::Color::RayWhite());
+
+        raylib::DrawText("Congrats! You created your first window!", 190, 200, 20, raylib::Color::Black());
+
+        window_.EndDrawing();
+    }
+}
+
+}  // namespace game
+```
+
+```c++ title="test/main_test.cc"
+#include <gmock/gmock.h>
+#include <gtest/gtest.h>
+
+// Demonstrate some basic assertions.
+TEST(MainTest, BasicAssertions) {
+    // Expect two strings not to be equal.
+    EXPECT_STRNE("hello", "world");
+    // Expect equality.
+    EXPECT_EQ(7 * 6, 42);
 }
 ```
 
@@ -67,15 +131,13 @@ Now for the fun stuff.
 Zig is not stable. APIs are subject to breakage with each release, and the tooling, while impressive for a pre-1.0 language, has many rough edges. An example of this is the lack of an ergonomic package manager. Coming from the Rust and Go worlds, `build.zig.zon` is far cry from `cargo add` or `go get`, but it is all we have to work with. The `build.zig.zon` file specifies dependencies in Zig Object Notation, which looks pretty similar to JSON (with more punctuation). The possible top level keys are specified in the [documentation](https://github.com/ziglang/zig/blob/master/doc/build.zig.zon.md) (there aren't very many). We can start off our `build.zig.zon` with the following:
 
 ```zig title="build.zig.zon"
-
 .{
-    .name = "proof-of-concept",
+    .name = "game",
     .version = "0.0.1",
     .dependencies = .{},
 
     .paths = .{"build.zig"},
 }
-
 ```
 
 Each dependency is a struct which may include the following keys:
@@ -86,15 +148,15 @@ Each dependency is a struct which may include the following keys:
 
 <br />
 
-You must either provide a url and a hash, or a path. We will be using some C and C++ libraries from GitHub, and won't have any actual zig code in our project at all (although there are zig bindings for raylib)<sup>1</sup>. The url of a GitHub dependency in `build.zig.zon` is not the GitHub URL for the project, but rather a link to the zipped (.tar.gz) project. To retrieve this for a branch, go where you normally would to clone the project and copy the "Download ZIP" link. You can also do this for tags by copying the tar.gz URL for the tag. This sounds confusing, but really isn't difficult in practice. Let's add raylib as a dependency.
+You must either provide a url and a hash, or a path. We will be using some C and C++ libraries from GitHub, and won't have any actual zig code in our project at all (although there are zig bindings for raylib)<sup>1</sup>. The url of a GitHub dependency in `build.zig.zon` is not the GitHub URL for the project, but rather a link to the zipped (.tar.gz, zip) project. To retrieve this for a branch, go where you normally would to clone the project and copy the "Download ZIP" link. You can also do this for tags by copying the tar.gz or zip URL for the tag. This sounds confusing, but really isn't difficult in practice. Let's add raylib as a dependency.
 
 ```zig title="build.zig.zon" ins={5-7}
 .{
-    .name = "proof-of-concept",
+    .name = "game",
     .version = "0.0.1",
     .dependencies = .{
         .raylib = .{
-            .url = "https://github.com/raysan5/raylib/archive/52f2a10db610d0e9f619fd7c521db08a876547d0.tar.gz",
+            .url = "https://github.com/raysan5/raylib/archive/refs/heads/master.zip",
         },
     },
 
@@ -106,11 +168,11 @@ We also need to specify a hash. To get this hash, you can run `zig fetch <url>`.
 
 ```zig title="build.zig.zon" ins={7}
 .{
-    .name = "proof-of-concept",
+    .name = "game",
     .version = "0.0.1",
     .dependencies = .{
         .raylib = .{
-            .url = "https://github.com/raysan5/raylib/archive/52f2a10db610d0e9f619fd7c521db08a876547d0.tar.gz",
+            .url = "https://github.com/raysan5/raylib/archive/refs/heads/master.zip",
             .hash = "1220761aef32a253042bf79d5acc4c2013853f4db5a9a9f68cd341ee4ddb9099803a", // master
         },
     },
@@ -119,15 +181,19 @@ We also need to specify a hash. To get this hash, you can run `zig fetch <url>`.
 }
 ```
 
+It's important to note that since we're tracking raylib's master branch, we will need to update the hash when new commits are made. Raylib's `build.zig` in its last release (5.0.0) doesn't work with the most recent version of zig so we have to track master. If this is an issue, you can fork raylib and point your `.url` at the forked version of master. It also means you shouldn't just copy this hash if you're following along with me–generate your own. It'll probably be different.
+
+<br />
+
 The second dependency we need for our project is the [C++ bindings for raylib](https://github.com/RobLoach/raylib-cpp). We can add another dependency to our project like so:
 
 ```zig title="build.zig.zon" ins={9-12}
 .{
-    .name = "proof-of-concept",
+    .name = "game",
     .version = "0.0.1",
     .dependencies = .{
         .raylib = .{
-            .url = "https://github.com/raysan5/raylib/archive/52f2a10db610d0e9f619fd7c521db08a876547d0.tar.gz",
+            .url = "https://github.com/raysan5/raylib/archive/refs/heads/master.zip",
             .hash = "1220761aef32a253042bf79d5acc4c2013853f4db5a9a9f68cd341ee4ddb9099803a", // master
         },
         .@"raylib-cpp" = .{
@@ -144,11 +210,36 @@ This dependency is pinned to the `5.0.2` (most recent as of September 13, 2024) 
 
 <br />
 
+The third dependency we need is [GoogleTest](https://github.com/google/googletest).
+
+```zig title="build.zig.zon" ins={13-16}
+.{
+    .name = "game",
+    .version = "0.0.1",
+    .dependencies = .{
+        .raylib = .{
+            .url = "https://github.com/raysan5/raylib/archive/refs/heads/master.zip",
+            .hash = "1220761aef32a253042bf79d5acc4c2013853f4db5a9a9f68cd341ee4ddb9099803a", // master
+        },
+        .@"raylib-cpp" = .{
+            .url = "https://github.com/RobLoach/raylib-cpp/archive/refs/tags/v5.0.2.tar.gz",
+            .hash = "12200de71a671fc3b2155475bc6691c51ac1ce81f4910fb0db9cad579a1047877108",
+        },
+        .googletest = .{
+            .url = "https://github.com/google/googletest/archive/refs/heads/main.zip",
+            .hash = "122098d850ec2ed23b11c196d9a3d8f16d7617cf5a0ee47379399334fbcfb8d9d913",
+        },
+    },
+
+    .paths = .{"build.zig"},
+}
+```
+
 ## Writing a Build File
 
 <br />
 
-Start with the following in your `build.zig`. This just sets up an executable with a single source file (`main.cc`), with default target and optimization options. It also links `libc` and `libcpp` so the standard libraries for C and C++ are accessible.
+Start with the following in your `build.zig`. This just sets up an executable with the source files we created (`main.cc` and `src/game.cc`), with default target and optimization options. It also links `libc` and `libcpp` so the standard libraries for C and C++ are accessible.
 
 ```zig title="build.zig"
 const std = @import("std");
@@ -158,13 +249,17 @@ pub fn build(b: *std.Build) void {
     const optimize = b.standardOptimizeOption(.{});
 
     const exe = b.addExecutable(.{
-        .name = "proof-of-concept",
+        .name = "game",
         .target = target,
         .optimize = optimize,
     });
 
-    exe.addCSourceFile(.{
-        .file = b.path("main.cc"),
+    exe.addCSourceFiles(.{
+        .root = b.path("."),
+        .files = &.{
+            "main.cc",
+            "src/game.cc",
+        },
     });
     exe.linkLibC();
     exe.linkLibCpp();
@@ -177,9 +272,9 @@ Now we can add our dependencies.
 
 <br />
 
-Since raylib has a `build.zig` file, we have an easy time installing it. We can reference the dependency by its name in `build.zig.zon`, create an artifact, link the artifact to the executable, and install the headers alongside the executable. The headers will show up under `/zig-out/include`.
+Since raylib has a `build.zig` file, we have a relatively easy time installing it. We can reference the dependency by its name in `build.zig.zon`, create an artifact, link the artifact to the executable, and install the headers alongside the executable. The headers will show up under `/zig-out/include`.
 
-```zig title="build.zig" ins={19-27}
+```zig title="build.zig" ins={23-29} collapse={4-21}
 const std = @import("std");
 
 pub fn build(b: *std.Build) void {
@@ -187,13 +282,17 @@ pub fn build(b: *std.Build) void {
     const optimize = b.standardOptimizeOption(.{});
 
     const exe = b.addExecutable(.{
-        .name = "proof-of-concept",
+        .name = "game",
         .target = target,
         .optimize = optimize,
     });
 
-    exe.addCSourceFile(.{
-        .file = b.path("main.cc"),
+    exe.addCSourceFiles(.{
+        .root = b.path("."),
+        .files = &.{
+            "main.cc",
+            "src/game.cc",
+        },
     });
     exe.linkLibC();
     exe.linkLibCpp();
@@ -214,7 +313,7 @@ pub fn build(b: *std.Build) void {
 
 The C++ bindings to raylib are a little more complicated to add as a dependency, but it's still not too difficult–you just can't make it an artifact the way you can with raylib<sup>2</sup>.
 
-```zig title="build.zig" ins={25-28,31,34-40}
+```zig title="build.zig" ins={29-32,35,38-44} collapse={4-27}
 const std = @import("std");
 
 pub fn build(b: *std.Build) void {
@@ -222,13 +321,17 @@ pub fn build(b: *std.Build) void {
     const optimize = b.standardOptimizeOption(.{});
 
     const exe = b.addExecutable(.{
-        .name = "proof-of-concept",
+        .name = "game",
         .target = target,
         .optimize = optimize,
     });
 
-    exe.addCSourceFile(.{
-        .file = b.path("main.cc"),
+    exe.addCSourceFiles(.{
+        .root = b.path("."),
+        .files = &.{
+            "main.cc",
+            "src/game.cc",
+        },
     });
     exe.linkLibC();
     exe.linkLibCpp();
@@ -266,7 +369,7 @@ These additions add `raylib-cpp` as a dependency, adds the include path of `rayl
 
 The last thing we can do is add a run command (kind of like a `cmake` target). This is easy. Just add the following lines at the bottom.
 
-```zig title="build.zig" collapse={4-43} ins={44-46}
+```zig title="build.zig" collapse={4-47} ins={47-50}
 const std = @import("std");
 
 pub fn build(b: *std.Build) void {
@@ -274,13 +377,17 @@ pub fn build(b: *std.Build) void {
     const optimize = b.standardOptimizeOption(.{});
 
     const exe = b.addExecutable(.{
-        .name = "proof-of-concept",
+        .name = "game",
         .target = target,
         .optimize = optimize,
     });
 
-    exe.addCSourceFile(.{
-        .file = b.path("main.cc"),
+    exe.addCSourceFiles(.{
+        .root = b.path("."),
+        .files = &.{
+            "main.cc",
+            "src/game.cc",
+        },
     });
     exe.linkLibC();
     exe.linkLibCpp();
@@ -320,6 +427,534 @@ Now if you run `zig build`, your project will be built and linked properly, and 
 
 <br />
 
+## Building a Test Binary
+
+<br />
+
+Building GoogleTest is a lot more involved than adding Raylib since it doesn't have a zig build system configured. We'll have to do that ourselves. Luckily, that's not too difficult. First, let's create a new executable and load the dependency.
+
+```zig title="build.zig" ins={13-17,30-36} collapse={36-70}
+const std = @import("std");
+
+pub fn build(b: *std.Build) void {
+    const target = b.standardTargetOptions(.{});
+    const optimize = b.standardOptimizeOption(.{});
+
+    const exe = b.addExecutable(.{
+        .name = "game",
+        .target = target,
+        .optimize = optimize,
+    });
+
+    const test_exe = b.addExecutable(.{
+        .name = "game_test",
+        .target = target,
+        .optimize = optimize,
+    });
+
+    exe.addCSourceFiles(.{
+        .root = b.path("."),
+        .files = &.{
+            "main.cc",
+            "src/game.cc",
+        },
+    });
+    exe.linkLibC();
+    exe.linkLibCpp();
+
+
+    test_exe.addCSourceFiles(.{
+        .root = b.path("test"),
+        .files = &.{
+            "main_test.cc",
+        },
+    });
+    test_exe.linkLibCpp();
+
+    const googletest = b.dependency("googletest", .{
+        .target = target,
+        .optimize = optimize,
+    });
+
+    const raylib = b.dependency("raylib", .{
+        .target = target,
+        .optimize = optimize,
+    });
+    const raylibArtifact = raylib.artifact("raylib");
+
+    const raylibCpp = b.dependency("raylib-cpp", .{
+        .target = target,
+        .optimize = optimize,
+    });
+
+    exe.linkLibrary(raylibArtifact);
+    exe.addIncludePath(raylibCpp.path("include"));
+
+    b.installArtifact(raylibArtifact);
+    b.installDirectory(
+        .{
+            .source_dir = raylibCpp.path("include"),
+            .install_dir = .header,
+            .install_subdir = "",
+        },
+    );
+
+    b.installArtifact(exe);
+
+    const run = b.addRunArtifact(exe);
+    const run_step = b.step("run", "Run the application");
+    run_step.dependOn(&run.step);
+}
+```
+
+Now we need to specify how to build and link GoogleTest. This process involves inspecting the structure of the GoogleTest library on GitHub and telling zig to create a static library with that information.
+
+```zig title="build.zig" collapse={4-42} ins={43-77}
+const std = @import("std");
+
+pub fn build(b: *std.Build) void {
+    const target = b.standardTargetOptions(.{});
+    const optimize = b.standardOptimizeOption(.{});
+
+    const exe = b.addExecutable(.{
+        .name = "game",
+        .target = target,
+        .optimize = optimize,
+    });
+
+    const test_exe = b.addExecutable(.{
+        .name = "game_test",
+        .target = target,
+        .optimize = optimize,
+    });
+
+    exe.addCSourceFiles(.{
+        .root = b.path("."),
+        .files = &.{
+            "main.cc",
+            "src/game.cc",
+        },
+    });
+    exe.linkLibC();
+    exe.linkLibCpp();
+
+
+    test_exe.addCSourceFiles(.{
+        .root = b.path("test"),
+        .files = &.{
+            "main_test.cc",
+        },
+    });
+    test_exe.linkLibCpp();
+
+    const googletest = b.dependency("googletest", .{
+        .target = target,
+        .optimize = optimize,
+    });
+
+    const gtest = b.addStaticLibrary(.{
+        .name = "gtest",
+        .target = target,
+        .optimize = optimize,
+    });
+
+    gtest.linkLibCpp();
+    gtest.addCSourceFiles(
+        .{
+            .root = googletest.path("googletest/src"),
+            .files = &.{
+                "gtest-all.cc",
+                "gtest-assertion-result.cc",
+                "gtest-death-test.cc",
+                "gtest-filepath.cc",
+                // "gtest-internal-inl.h",
+                "gtest-matchers.cc",
+                "gtest-port.cc",
+                "gtest-printers.cc",
+                "gtest-test-part.cc",
+                "gtest-typed-test.cc",
+                "gtest.cc",
+                "gtest_main.cc",
+            },
+            .flags = &.{
+                "-std=c++17",
+            },
+        },
+    );
+
+    gtest.addIncludePath(googletest.path("googletest"));
+    gtest.addIncludePath(googletest.path("googletest/src"));
+    gtest.addIncludePath(googletest.path("googletest/include"));
+    gtest.addIncludePath(googletest.path("googletest/include/internal"));
+    gtest.addIncludePath(googletest.path("googletest/include/internal/custom"));
+
+    const raylib = b.dependency("raylib", .{
+        .target = target,
+        .optimize = optimize,
+    });
+    const raylibArtifact = raylib.artifact("raylib");
+
+    const raylibCpp = b.dependency("raylib-cpp", .{
+        .target = target,
+        .optimize = optimize,
+    });
+
+    exe.linkLibrary(raylibArtifact);
+    exe.addIncludePath(raylibCpp.path("include"));
+
+    b.installArtifact(raylibArtifact);
+    b.installDirectory(
+        .{
+            .source_dir = raylibCpp.path("include"),
+            .install_dir = .header,
+            .install_subdir = "",
+        },
+    );
+
+    b.installArtifact(exe);
+
+    const run = b.addRunArtifact(exe);
+    const run_step = b.step("run", "Run the application");
+    run_step.dependOn(&run.step);
+}
+```
+
+Notice how `gtest-internals-inl.h` is commented out. Do not make the same mistake I did and include that file. Inline headers are not part of the C++ source files, and you will get a scary error if you include it.
+
+<br />
+
+For GoogleMock, the process is similar:
+
+```zig title="build.zig" collapse={4-77,116-144} ins={79-114}
+const std = @import("std");
+
+pub fn build(b: *std.Build) void {
+    const target = b.standardTargetOptions(.{});
+    const optimize = b.standardOptimizeOption(.{});
+
+    const exe = b.addExecutable(.{
+        .name = "game",
+        .target = target,
+        .optimize = optimize,
+    });
+
+    const test_exe = b.addExecutable(.{
+        .name = "game_test",
+        .target = target,
+        .optimize = optimize,
+    });
+
+    exe.addCSourceFiles(.{
+        .root = b.path("."),
+        .files = &.{
+            "main.cc",
+            "src/game.cc",
+        },
+    });
+    exe.linkLibC();
+    exe.linkLibCpp();
+
+
+    test_exe.addCSourceFiles(.{
+        .root = b.path("test"),
+        .files = &.{
+            "main_test.cc",
+        },
+    });
+    test_exe.linkLibCpp();
+
+    const googletest = b.dependency("googletest", .{
+        .target = target,
+        .optimize = optimize,
+    });
+
+    const gtest = b.addStaticLibrary(.{
+        .name = "gtest",
+        .target = target,
+        .optimize = optimize,
+    });
+
+    gtest.linkLibCpp();
+    gtest.addCSourceFiles(
+        .{
+            .root = googletest.path("googletest/src"),
+            .files = &.{
+                "gtest-all.cc",
+                "gtest-assertion-result.cc",
+                "gtest-death-test.cc",
+                "gtest-filepath.cc",
+                // "gtest-internal-inl.h",
+                "gtest-matchers.cc",
+                "gtest-port.cc",
+                "gtest-printers.cc",
+                "gtest-test-part.cc",
+                "gtest-typed-test.cc",
+                "gtest.cc",
+                "gtest_main.cc",
+            },
+            .flags = &.{
+                "-std=c++17",
+            },
+        },
+    );
+
+    gtest.addIncludePath(googletest.path("googletest"));
+    gtest.addIncludePath(googletest.path("googletest/src"));
+    gtest.addIncludePath(googletest.path("googletest/include"));
+    gtest.addIncludePath(googletest.path("googletest/include/internal"));
+    gtest.addIncludePath(googletest.path("googletest/include/internal/custom"));
+
+    const gmock = b.addStaticLibrary(.{
+        .name = "gmock",
+        .target = target,
+        .optimize = optimize,
+    });
+
+    gmock.linkLibCpp();
+
+    gmock.addCSourceFiles(
+        .{
+            .root = googletest.path("googlemock/src"),
+            .files = &.{
+                "gmock-all.cc",
+                "gmock-cardinalities.cc",
+                "gmock-internal-utils.cc",
+                "gmock-matchers.cc",
+                "gmock-spec-builders.cc",
+                "gmock.cc",
+                "gmock_main.cc",
+            },
+            .flags = &.{
+                "-std=c++17",
+            },
+        },
+    );
+
+    gmock.addIncludePath(googletest.path("googlemock"));
+    gmock.addIncludePath(googletest.path("googlemock/include"));
+    gmock.addIncludePath(googletest.path("googlemock/include/gmock"));
+    gmock.addIncludePath(googletest.path("googlemock/include/gmock/internal"));
+    gmock.addIncludePath(googletest.path("googlemock/include/gmock/internal/custom"));
+    gmock.addIncludePath(googletest.path("googletest"));
+    gmock.addIncludePath(googletest.path("googletest/src"));
+    gmock.addIncludePath(googletest.path("googletest/include"));
+    gmock.addIncludePath(googletest.path("googletest/include/internal"));
+    gmock.addIncludePath(googletest.path("googletest/include/internal/custom"));
+
+
+    const raylib = b.dependency("raylib", .{
+        .target = target,
+        .optimize = optimize,
+    });
+    const raylibArtifact = raylib.artifact("raylib");
+
+    const raylibCpp = b.dependency("raylib-cpp", .{
+        .target = target,
+        .optimize = optimize,
+    });
+
+    exe.linkLibrary(raylibArtifact);
+    exe.addIncludePath(raylibCpp.path("include"));
+
+    b.installArtifact(raylibArtifact);
+    b.installDirectory(
+        .{
+            .source_dir = raylibCpp.path("include"),
+            .install_dir = .header,
+            .install_subdir = "",
+        },
+    );
+
+    b.installArtifact(exe);
+
+    const run = b.addRunArtifact(exe);
+    const run_step = b.step("run", "Run the application");
+    run_step.dependOn(&run.step);
+}
+```
+
+Now we just need to link the static libraries we've built to `test_exe` and tell zig to output the C++ headers in a convenient location. We can also add another run target at the bottom so we can conveniently run all the tests.
+
+```zig title="build.zig" ins={132-135,146-160,164,170-172} collapse={4-144}
+const std = @import("std");
+
+pub fn build(b: *std.Build) void {
+    const target = b.standardTargetOptions(.{});
+    const optimize = b.standardOptimizeOption(.{});
+
+    const exe = b.addExecutable(.{
+        .name = "roguelike",
+        .target = target,
+        .optimize = optimize,
+    });
+
+    const test_exe = b.addExecutable(.{
+        .name = "roguelike_test",
+        .target = target,
+        .optimize = optimize,
+    });
+
+    exe.addCSourceFiles(.{
+        .root = b.path("."),
+        .files = &.{
+            "main.cc",
+            "src/game.cc",
+        },
+    });
+    exe.linkLibC();
+    exe.linkLibCpp();
+
+    test_exe.addCSourceFiles(.{
+        .root = b.path("test"),
+        .files = &.{
+            "main_test.cc",
+        },
+    });
+    test_exe.linkLibCpp();
+
+    const googletest = b.dependency("googletest", .{
+        .target = target,
+        .optimize = optimize,
+    });
+
+    const gtest = b.addStaticLibrary(.{
+        .name = "gtest",
+        .target = target,
+        .optimize = optimize,
+    });
+
+    gtest.linkLibCpp();
+    gtest.addCSourceFiles(
+        .{
+            .root = googletest.path("googletest/src"),
+            .files = &.{
+                "gtest-all.cc",
+                "gtest-assertion-result.cc",
+                "gtest-death-test.cc",
+                "gtest-filepath.cc",
+                // LOL @ this bug
+                // "gtest-internal-inl.h",
+                "gtest-matchers.cc",
+                "gtest-port.cc",
+                "gtest-printers.cc",
+                "gtest-test-part.cc",
+                "gtest-typed-test.cc",
+                "gtest.cc",
+                "gtest_main.cc",
+            },
+            .flags = &.{
+                "-std=c++17",
+            },
+        },
+    );
+
+    gtest.addIncludePath(googletest.path("googletest"));
+    gtest.addIncludePath(googletest.path("googletest/src"));
+    gtest.addIncludePath(googletest.path("googletest/include"));
+    gtest.addIncludePath(googletest.path("googletest/include/internal"));
+    gtest.addIncludePath(googletest.path("googletest/include/internal/custom"));
+
+    const gmock = b.addStaticLibrary(.{
+        .name = "gmock",
+        .target = target,
+        .optimize = optimize,
+    });
+
+    gmock.linkLibCpp();
+
+    gmock.addCSourceFiles(
+        .{
+            .root = googletest.path("googlemock/src"),
+            .files = &.{
+                "gmock-all.cc",
+                "gmock-cardinalities.cc",
+                "gmock-internal-utils.cc",
+                "gmock-matchers.cc",
+                "gmock-spec-builders.cc",
+                "gmock.cc",
+                "gmock_main.cc",
+            },
+            .flags = &.{
+                "-std=c++17",
+            },
+        },
+    );
+
+    gmock.addIncludePath(googletest.path("googlemock"));
+    gmock.addIncludePath(googletest.path("googlemock/include"));
+    gmock.addIncludePath(googletest.path("googlemock/include/gmock"));
+    gmock.addIncludePath(googletest.path("googlemock/include/gmock/internal"));
+    gmock.addIncludePath(googletest.path("googlemock/include/gmock/internal/custom"));
+    gmock.addIncludePath(googletest.path("googletest"));
+    gmock.addIncludePath(googletest.path("googletest/src"));
+    gmock.addIncludePath(googletest.path("googletest/include"));
+    gmock.addIncludePath(googletest.path("googletest/include/internal"));
+    gmock.addIncludePath(googletest.path("googletest/include/internal/custom"));
+
+    const raylib = b.dependency("raylib", .{
+        .target = target,
+        .optimize = optimize,
+    });
+
+    const raylibArtifact = raylib.artifact("raylib");
+
+    const raylibCpp = b.dependency("raylib-cpp", .{
+        .target = target,
+        .optimize = optimize,
+    });
+
+    exe.linkLibrary(raylibArtifact);
+    exe.addIncludePath(raylibCpp.path("include"));
+    exe.addIncludePath(b.path("include"));
+
+    test_exe.linkLibrary(gtest);
+    test_exe.linkLibrary(gmock);
+    test_exe.addIncludePath(googletest.path("googletest/include"));
+    test_exe.addIncludePath(googletest.path("googlemock/include"));
+
+    b.installArtifact(raylibArtifact);
+    b.installDirectory(
+        .{
+            .source_dir = raylibCpp.path("include"),
+            .install_dir = .header,
+            .install_subdir = "",
+        },
+    );
+
+    b.installDirectory(
+        .{
+            .source_dir = googletest.path("googletest/include"),
+            .install_dir = .header,
+            .install_subdir = "",
+        },
+    );
+
+    b.installDirectory(
+        .{
+            .source_dir = googletest.path("googlemock/include"),
+            .install_dir = .header,
+            .install_subdir = "",
+        },
+    );
+
+    b.installArtifact(exe);
+
+    b.installArtifact(test_exe);
+
+    const run = b.addRunArtifact(exe);
+    const run_step = b.step("run", "Run the application");
+    run_step.dependOn(&run.step);
+
+    const run_test = b.addRunArtifact(test_exe);
+    const run_test_step = b.step("test", "Run the tests");
+    run_test_step.dependOn(&run_test.step);
+}
+```
+
+Running `zig build` should build GoogleTest and add the headers to `/zig-out/include/`. Running `zig build test` will run the tests.
+
+<br />
+
 ## Editor Support
 
 <br />
@@ -343,29 +978,5 @@ Anyway, hope this was informative. It was interesting working with zig, and whil
 ## Addendums
 
 1. There are [zig bindings to raylib](https://github.com/Not-Nik/raylib-zig), but I _really_ wouldn't recommend using zig for actual production code outside of small, hobby projects. It's fine as a build system because of its cross compile capabilities and abstractions over clang, but, at the end of the day, its unstable. Use it for larger projects at your own risk. In my opinion, its LSP/editor support is lacking, its documentation is anemic, and you are expected to regularly read the source code of the standard library to keep up with breaking API changes which leads to a poor developer experience. I just wanted to include a link to the zig bindings for completeness.
-
-2. Header-only libraries like `raylib-cpp` are easy to include the way we do in this project. For projects which involve both source and header files, you will need to actually build the library with, for example,
-
-```zig title="build.zig"
-pub fn build(b: *std.build.Builder) void {
-    const target = b.standardTargetOptions(.{});
-    const mode = b.standardReleaseOptions();
-
-    const lib = b.addStaticLibrary("lib", null);
-    lib.setTarget(target);
-    lib.setBuildMode(mode);
-    lib.linkLibC();
-    lib.force_pic = true;
-    lib.addCSourceFiles(&.{
-      // source files
-    }, &.{
-      // compiler flags
-    });
-
-    // the rest of your build
-}
-```
-
-If some of this syntax is wrong or outdated...oh well, I adapted it from [this blog post]("https://zig.news/kristoff/make-zig-your-c-c-build-system-28g5") and it was written in 2021 and have not tested it (unlike the code in the rest of this post). Do your best to patch the above if you need to build a library with both sources and headers.
 
 <br />
