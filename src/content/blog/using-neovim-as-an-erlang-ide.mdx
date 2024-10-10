@@ -1,0 +1,90 @@
+---
+title: "Using Neovim as an Erlang IDE"
+description: "Using erlang_ls and nvim-lspconfig to set up an IDE-like experience for developing Erlang"
+pubDate: "October 10 2024"
+tags:
+  - erlang
+  - neovim
+---
+
+As a less mainstream language, Erlang doesn't generally have a great out-of-the-box developer experience. As someone new to Erlang (and the BEAM in general), who also uses Neovim as their daily driver, I wanted to see whether I could setup a functional Neovim configuration that would give me IDE-like features for Erlang. I specifically wanted the following:
+
+<br />
+
+- Code formatting on save
+- Hover documentation
+- Goto definition
+- Code actions
+- Quickly jumping to workspace symbols
+
+  <br />
+
+Luckily, there is [an erlang language server](https://github.com/erlang-ls/erlang_ls) which has pretty much everything you need out of the box. Once you install it (and `erlang_ls` is in your `$PATH`), configuring it for Neovim is actually pretty simple. I adapted my OCaml configuration a bit, and it resulted in something that worked. The plugin spec is as follows.
+
+```lua title="erlang.lua"
+return {
+  setup = function()
+    local lsp = require "lspconfig"
+
+    local c = vim.lsp.protocol.make_client_capabilities()
+    c.textDocument.completion.completionItem.snippetSupport = true
+    c.textDocument.completion.completionItem.resolveSupport = {
+      properties = {
+        "documentation",
+        "detail",
+        "additionalTextEdits",
+      },
+    }
+
+    local on_attach = function(client, bufnr)
+      vim.api.nvim_buf_set_option(bufnr, "omnifunc", "v:lua.vim.lsp.omnifunc")
+
+      if client.server_capabilities.documentFormattingProvider then
+        vim.api.nvim_create_autocmd("BufWritePre", {
+          group = vim.api.nvim_create_augroup("Format", { clear = true }),
+          buffer = bufnr,
+          callback = function() vim.lsp.buf.formatting_seq_sync() end,
+        })
+      end
+      --
+      -- code lens
+      if client.resolved_capabilities and client.resolved_capabilities.code_lens then
+        local codelens = vim.api.nvim_create_augroup("LSPCodeLens", { clear = true })
+        vim.api.nvim_create_autocmd({ "BufEnter", "InsertLeave", "CursorHold" }, {
+          group = codelens,
+          callback = function() vim.lsp.codelens.refresh() end,
+          buffer = bufnr,
+        })
+      end
+    end
+
+    local capabilities = require("cmp_nvim_lsp").default_capabilities(c)
+
+    return {
+      cmd = { "erlang_ls", "-l", "error" },
+      filetypes = { "erlang" },
+      root_dir = lsp.util.root_pattern "*.erl",
+      on_attach = on_attach,
+      capabilities = capabilities,
+    }
+  end,
+}
+```
+
+You can import it like a normal lua module and call `setup` where necessary. Personally, I use [AstroNvim](https://astronvim.com/), so I added it to the config table as follows:
+
+```lua title="astrolsp.lua"
+return {
+  opts = {
+    -- ...
+    config = {
+      erlang_ls = erlang.setup(),
+    }
+    -- ...
+  }
+}
+```
+
+Anyway, I know this was short, but I thought this was cool and might help someone else in the future. Also, it's been two weeks since I've written a post and I don't want the two people who read this blog post to think I've abandoned it (I haven't!). See you next time (:
+
+<br />
