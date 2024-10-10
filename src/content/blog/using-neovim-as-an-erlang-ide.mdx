@@ -37,7 +37,8 @@ return {
     }
 
     local on_attach = function(client, bufnr)
-      vim.api.nvim_buf_set_option(bufnr, "omnifunc", "v:lua.vim.lsp.omnifunc")
+      -- enable completion triggered by <C-x><C-o>
+      -- vim.api.nvim_buf_set_option(bufnr, "omnifunc", "v:lua.vim.lsp.omnifunc")
 
       if client.server_capabilities.documentFormattingProvider then
         vim.api.nvim_create_autocmd("BufWritePre", {
@@ -56,12 +57,29 @@ return {
           buffer = bufnr,
         })
       end
+
+      local original_progress_handler = vim.lsp.handlers["$/progress"]
+      local initialized = false
+
+      -- Silence most of the annoying messages from the LSP outside of initialization messages
+      vim.lsp.handlers["$/progress"] = function(err, result, ctx, config)
+        if result.value and result.value.title and result.value.title:match "Indexing OTP" then
+          return
+        end
+
+        if not initialized then
+          original_progress_handler(err, result, ctx, config)
+          if result.value and result.value.kind == "end" or result.value == "Indexing OTP" then initialized = true end
+        else
+          return
+        end
+      end
     end
 
     local capabilities = require("cmp_nvim_lsp").default_capabilities(c)
 
     return {
-      cmd = { "erlang_ls", "-l", "error" },
+      cmd = { "erlang_ls" },
       filetypes = { "erlang" },
       root_dir = lsp.util.root_pattern "*.erl",
       on_attach = on_attach,
@@ -85,6 +103,6 @@ return {
 }
 ```
 
-Anyway, I know this was short, but I thought this was cool and might help someone else in the future. Also, it's been two weeks since I've written a post and I don't want the two people who read this blog post to think I've abandoned it (I haven't!). See you next time (:
+Anyway, I know this was short, but I thought this was cool and might help someone else in the future. Also, it's been two weeks since I've written a post and I don't want the two people who read this blog to think I've abandoned it (I haven't!). See you next time (:
 
 <br />
