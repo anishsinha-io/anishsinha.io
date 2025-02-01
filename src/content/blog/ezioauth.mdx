@@ -1,0 +1,497 @@
+---
+title: "EzioAuth (it's been a while)"
+description: "EzioAuth is a command line tool that makes it easy for you to retrieve an access token from an OIDC server for rapid development."
+pubDate: "Jan 31 2025"
+tags:
+  - go
+  - openid-connect
+  - cli
+---
+
+Hey, it's been a while. I really didn't mean to leave such a gap between my last post and this one. I think I let perfect be the enemy of good at least a few times in the past few months. One thing that's hard for me to do is to write about something and have it not be _my_ definition of "high quality", so although I've had ideas on new topics to write about in the past few months, I couldn't really get myself to write and complete an entire post. I really need to make a little "notes" section on this page where I can write little snippets. I'd definitely post a lot more if I did. A lot has happened in the past few months though. I'm working on an app which might hopefully become something meaningful at some point in the future. I've always wanted to create a startup and since I'm (potentially) having meetings with a few VCs later this year, it's been a bit nerve wracking since I'm working hard to create an MVP. On a similar note, I'm on the job market. It's scary, and I'm unsure what the future holds, but for now I'm just gritting my teeth, holding my breath, and praying that the next week of my job hunt goes well. Anyway, I digress. The reason I'm writing this post isn't to ramble about my life (though it is cathartic); it's to talk about a thing I _did_ build in it's entirety.
+
+<br />
+
+## Background
+
+<br />
+
+EzioAuth is a little CLI tool I built to solve a problem I was having when developing the app that I'm hopefully going to get funding for. The problem was retrieving access tokens from Keycloak. If you don't know, [Keycloak](https://github.com/keycloak/keycloak.git) is an open-source identity an access management software. It can be used as a standalone OpenID Connect server. I'm using it to secure the app I'm building since I _need_ multiple tenants and I'm too cheap to pay Auth0 out of my own pocket (they only give you one free tenant). Keycloak, like any good OIDC server, supports the authorization code flow (for more information, take a look at the [openid specs](https://openid.net/developers/specs/), specifically the information [here](https://openid.net/specs/openid-connect-core-1_0.html#CodeFlowAuth)). Completing the authorization code flow successfully results in you receiving a valid JWT from the OIDC server which you can use to authenticate to a backend API that accepts the token. The core issue is that it's annoying to get a token without going through the flow in a browser. I need tokens to test my API correctly since all endpoints are behind some kind of authentication, so I wrote a little Go program to do it. Embarassingly, my solution before Ezioauth was to build an entire, minimal frontend which configured all the Keycloak stuff correctly, and then I'd manually go through the flow and output the token in a paragraph tag on the page. Needless to say, this was not ideal.
+
+<br />
+
+## EzioAuth
+
+<br />
+
+EzioAuth can be configured through command line flags, environment variables, a configuration file, or some combination of those. Once configured, it will start a callback server on `localhost:<port>` (port is configurable). It has a handler that listens on `localhost:<port>/callback`. Once started, it will prompt you to navigate to a URL printed out in the console. The URL points to the authorization server so that you can authenticate with it. The `scope`, `client_id`, `redirect_uri`, and `response_type` parameters (some configurable) are used to craft that URL. Once you authenticate, a page (served by the EzioAuth callback server) will be displayed telling you that you can close the tab. A message in the console will appear, telling you that the access token has been copied to your clipboard.
+
+<br />
+
+This is all well and good, but the actual time-saving bit of this comes on every subsequent request. EzioAuth caches the access token and refresh token returned by the authorization server in a cache file, which is stored at `$XDG_CACHE_HOME/ezioauth/credentials.json` (by default–it's configurable). On subsequent runs, as long as the session established with the authorization server is still valid, there is no interaction needed aside from running the program; Ezioauth will just get the token for you and copy it to your clipboard.
+
+<br />
+
+If you're only interested in using it, you can either
+
+- `go install github.com/anishsinha-io/ezioauth`
+- build from source, aka `git clone git@github.com:anishsinha-io/ezioauth.git && cd ezioauth && just build && ./bin/ezioauth [OPTIONS]`
+
+<br />
+
+If you're also interested in how Ezioauth is implemented, feel free to read on (:
+
+<br />
+
+## Implementation Details
+
+<br />
+
+Aside from the Go standard library, Ezioauth depends on [xdg](https://github.com/adrg/xdg), [cli](https://github.com/urfave/cli), and [clipboard](https://github.com/golang-design/clipboard). My justifications for these libraries were:
+
+<br />
+
+- I don't want to deal with Windows
+- I don't want to deal with Windows
+- I hate `flag` from the Go standard library
+- I don't want to deal with Windows
+
+<br />
+
+In all seriousness, I wanted to store data and cache files in the right places regardless of operating system, and have a cross-platform "copy-to-clipboard" abstraction. I used an external CLI package because I loathe `flag` in the Go standard library. It's ugly, inflexible, and I generally am miserable when I use it. Anyway, here's how the CLI is defined.
+
+```go title="cli.go" collapse={1-13,131-190,194-211}
+package main
+
+import (
+	"context"
+	"fmt"
+	"net/url"
+	"os"
+
+	"github.com/adrg/xdg"
+	"github.com/urfave/cli/v3"
+	"golang.design/x/clipboard"
+)
+
+// config represents the application configuration. It is a global variable initialized by `cmd`
+var config appConfig
+
+// author represents the author of the application
+type author struct {
+	name  string
+	email string
+}
+
+func (a author) String() string {
+	return a.name + " <" + a.email + ">"
+}
+
+// cmd represents the CLI command that initializes and validates the application configuration
+var cmd *cli.Command = &cli.Command{
+	Name:    "EzioAuth",
+	Version: "0.1.0",
+	Authors: []any{
+		author{
+			name:  "Anish",
+			email: "anishsinha0128@gmail.com",
+		},
+	},
+	Copyright:   "(c) 2025 EzioAuth authors",
+	Usage:       "Retrieve an access token from an OpenID server using the authorization code flow",
+	UsageText:   "ezioauth [options]",
+	Description: "EzioAuth is a CLI utility that lets you retrieve an access token from an OpenID Connect server using the authorization code flow.",
+	Flags: []cli.Flag{
+		&cli.StringFlag{
+			Name:     "config-file",
+			Usage:    "Path to the config file",
+			Sources:  cli.EnvVars("CONFIG_FILE"),
+			Category: "Server",
+		},
+
+		&cli.BoolFlag{
+			Name:     "save-config",
+			Value:    true,
+			Usage:    "Save the configuration to the default config file",
+			Sources:  cli.EnvVars("SAVE_CONFIG"),
+			Category: "Server",
+		},
+
+		&cli.StringFlag{
+			Name:        "server-auth-url",
+			Usage:       "URL of the OpenID Connect authentication server",
+			Sources:     cli.EnvVars("SERVER_AUTH_URL"),
+			Destination: &config.Server.AuthURL,
+			Category:    "Server",
+		},
+
+		&cli.StringFlag{
+			Name:        "server-token-url",
+			Usage:       "Token URL of the OpenID Connect authentication server",
+			Sources:     cli.EnvVars("SERVER_TOKEN_URL"),
+			Destination: &config.Server.TokenURL,
+			Category:    "Server",
+		},
+
+		&cli.StringFlag{
+			Name:        "server-client-id",
+			Usage:       "ID of the client to authenticate against",
+			Sources:     cli.EnvVars("SERVER_CLIENT_ID"),
+			Destination: &config.Server.ClientID,
+			Category:    "Server",
+		},
+
+		&cli.StringFlag{
+			Name:        "server-client-secret",
+			Usage:       "Secret of the client to authenticate against",
+			Sources:     cli.EnvVars("SERVER_CLIENT_SECRET"),
+			Destination: &config.Server.ClientSecret,
+			Category:    "Server",
+		},
+
+		&cli.StringFlag{
+			Name:        "server-redirect-uri",
+			Usage:       "URL to redirect to after authentication",
+			Sources:     cli.EnvVars("SERVER_REDIRECT_URI"),
+			Destination: &config.Server.RedirectURI,
+			Category:    "Server",
+		},
+
+		&cli.StringFlag{
+			Name:        "server-scope",
+			Usage:       "OpenID scope",
+			Sources:     cli.EnvVars("SERVER_SCOPE"),
+			Destination: &config.Server.Scope,
+			Category:    "Server",
+		},
+
+		&cli.StringFlag{
+			Name:        "callback-server-port",
+			Usage:       "Port to listen on for the callback server",
+			Sources:     cli.EnvVars("CALLBACK_SERVER_PORT"),
+			Destination: &config.CallbackServerPort,
+			Category:    "Global",
+		},
+
+		&cli.StringFlag{
+			Name:        "credentials-cache",
+			Usage:       "Path to where the app should cache the credentials",
+			Sources:     cli.EnvVars("CREDENTIALS_CACHE"),
+			Destination: &config.CredentialsCache,
+			Category:    "Global",
+		},
+
+		&cli.BoolFlag{
+			Name:     "skip-cache",
+			Value:    false,
+			Usage:    "Skip the cache and force a new token exchange",
+			Sources:  cli.EnvVars("SKIP_CACHE"),
+			Category: "Global",
+		},
+	},
+
+	Before: func(ctx context.Context, command *cli.Command) (context.Context, error) {
+		configFile := command.String("config-file")
+		var c appConfig
+
+		xdgConfigPath, err := initXDGConfig()
+		if err != nil {
+			return ctx, err
+		}
+
+		if configFile != "" {
+			if err := initFromFile(configFile, &c); err != nil {
+				return ctx, err
+			}
+		} else {
+
+			if err := initFromFile(xdgConfigPath, &c); err != nil {
+				return ctx, err
+			}
+		}
+
+		if config.Server.AuthURL == "" {
+			config.Server.AuthURL = c.Server.AuthURL
+		}
+
+		if config.Server.TokenURL == "" {
+			config.Server.TokenURL = c.Server.TokenURL
+		}
+
+		if config.Server.ClientID == "" {
+			config.Server.ClientID = c.Server.ClientID
+		}
+
+		if config.Server.ClientSecret == "" {
+			config.Server.ClientSecret = c.Server.ClientSecret
+		}
+
+		if config.Server.RedirectURI == "" {
+			config.Server.RedirectURI = c.Server.RedirectURI
+		}
+
+		if config.Server.Scope == "" {
+			config.Server.Scope = c.Server.Scope
+		}
+
+		if config.CallbackServerPort == "" {
+			config.CallbackServerPort = c.CallbackServerPort
+		}
+
+		if config.CredentialsCache == "" {
+			if c.CredentialsCache != "" {
+				config.CredentialsCache = c.CredentialsCache
+			} else {
+				path, err := xdg.CacheFile("ezioauth/credentials.json")
+				if err != nil {
+					return ctx, err
+				}
+				config.CredentialsCache = path
+			}
+		}
+
+		return ctx, nil
+	},
+
+	Action: func(ctx context.Context, command *cli.Command) error {
+		err := config.validate()
+		if err != nil {
+			return err
+		}
+
+		if command.Bool("save-config") {
+			configFilePath, err := xdg.ConfigFile("ezioauth/config.json")
+			if err != nil {
+				return err
+			}
+			if err := config.save(configFilePath); err != nil {
+				return err
+			}
+		}
+
+		skipCache := command.Bool("skip-cache")
+
+		return run(skipCache)
+	},
+}
+```
+
+The `urfave/cli` package allows you to declaratively define your CLI. What I really like about it is that you can define a destination for each flag, e.g. some pointer that you want the value of the flag written to, and that you can load flag values from environment variables. I use these features in most of the flags. This is cool because I can allow a user to provide configuration in a file, but allow environment variables and flags to take precedence over the config. Maybe one part of your config changes frequently but others stay the same, so you store most of the config in a file and pass flags for the rest of the arguments. Or maybe you just want to override values occasionally. `urfave/cli` makes it easy. The `flag` standard library package can rot in hell. Also, if you're curious, `appConfig` looks like this:
+
+```go title="config.go"
+type serverConfig struct {
+	AuthURL      string `json:"auth_url"`
+	TokenURL     string `json:"token_url"`
+	ClientID     string `json:"client_id"`
+	ClientSecret string `json:"client_secret"`
+	RedirectURI  string `json:"redirect_uri"`
+	Scope        string `json:"scope"`
+}
+
+type appConfig struct {
+	Server             serverConfig `json:"server"`
+	CredentialsCache   string       `json:"credentials_cache"`
+	CallbackServerPort string       `json:"callback_server_port"`
+}
+```
+
+The function which does the heavy lifting (called at the end of the `Action` function) is called `run`. It is responsible for loading cached token data (if any exists), and handling the following cases:
+
+<br />
+
+- No existing credentials &rarr; prompt user to complete the flow again
+- Refresh failure &rarr; display an error message and prompt user to complete the flow again
+- Refresh success &rarr; copy the access token to clipboard.
+
+<br />
+In either case which requires the user to complete the flow again, the
+application generates a state parameter, crafts a URL to the authorization
+server, prints it out, starts the callback server, and blocks until the flow is
+completed. Upon successful completion, it will attempt to exchange the returned
+code for a token, cache the access and refresh token, and copy the access token
+to the user's clipboard.
+<br />
+
+The `run` function is implemented as follows:
+
+```go title="run.go"
+func run(skipCache bool) error {
+	if cachedData, err := loadCachedTokenData(); err == nil && !skipCache {
+		refreshed, err := refreshToken(cachedData.RefreshToken)
+		if err != nil {
+			fmt.Printf("Failed to refresh token (%v). Clearing cache...\n", err)
+			os.Remove(config.CredentialsCache)
+		} else {
+			if err := cacheTokenData(refreshed); err != nil {
+				return err
+			}
+
+			clipboard.Write(clipboard.FmtText, []byte(refreshed.AccessToken))
+			fmt.Println("Token copied to clipboard")
+			return nil
+		}
+	}
+
+	state := createStateParam(16)
+
+	authReqURL := fmt.Sprintf("%s?client_id=%s&redirect_uri=%s&response_type=code&scope=%s&state=%s",
+		config.Server.AuthURL,
+		url.QueryEscape(config.Server.ClientID),
+		url.QueryEscape(config.Server.RedirectURI),
+		url.QueryEscape(config.Server.Scope),
+		url.QueryEscape(state),
+	)
+
+	fmt.Println("Please open the following URL in your browser to continue [cmd+click]:\n" + authReqURL)
+
+	codeChan := make(chan string)
+	go startCallbackServer(codeChan, state)
+
+	authCode := <-codeChan
+
+	data, err := exchangeCodeForToken(authCode)
+	if err != nil {
+		return fmt.Errorf("Failed to exchange code for token: %v", err)
+	}
+
+	if err := cacheTokenData(data); err != nil {
+		return fmt.Errorf("Failed to cache credentials: %v", err)
+	}
+
+	clipboard.Write(clipboard.FmtText, []byte(data.AccessToken))
+	fmt.Println("Token copied to clipboard")
+	return nil
+}
+```
+
+The callback server is started on `localhost:<port>` and a single endpoint is registered (on `/callback`) which validates the captured authorization code and state from the URL and sends it through the channel passed into the function. There's also a function called `exchangeCodeForToken` which actually does the code-for-token exchange. It crafts an HTTP request to the authorization server and requests a token given the code. Lastly, I also want to mention that there are two utility methods (one to refresh a token and one to generate random state). The implementation of all of these is below:
+
+```go title="srv.go" collapse={1-14}
+package main
+
+import (
+	"encoding/json"
+	"fmt"
+	"io"
+	"log"
+	"math/rand"
+	"net/http"
+	"net/url"
+	"strings"
+	"time"
+)
+
+// startCallbackServer starts a simple HTTP server that listens for the OAuth 2.0 authorization code.
+func startCallbackServer(codeChan chan<- string, expectedState string) {
+	http.HandleFunc("/callback", func(w http.ResponseWriter, r *http.Request) {
+		query := r.URL.Query()
+		code := query.Get("code")
+		state := query.Get("state")
+
+		if code == "" || state != expectedState {
+			http.Error(w, "Invalid request", http.StatusBadRequest)
+			return
+		}
+
+		fmt.Fprintln(w, "Authorization successful. You can close this tab.")
+
+		codeChan <- code
+	})
+
+	log.Fatal(http.ListenAndServe(fmt.Sprintf(":%s", config.CallbackServerPort), nil))
+}
+
+// exchangeCodeForToken exchanges the authorization code for an access token.
+func exchangeCodeForToken(authCode string) (tokenData, error) {
+	client := &http.Client{Timeout: 10 * time.Second}
+
+	data := url.Values{}
+	data.Set("grant_type", "authorization_code")
+	data.Set("code", authCode)
+	data.Set("redirect_uri", config.Server.RedirectURI)
+	data.Set("client_id", config.Server.ClientID)
+	data.Set("client_secret", config.Server.ClientSecret)
+
+	req, err := http.NewRequest("POST", config.Server.TokenURL, strings.NewReader(data.Encode()))
+	if err != nil {
+		return tokenData{}, err
+	}
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+
+	resp, err := client.Do(req)
+	if err != nil {
+		return tokenData{}, err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(resp.Body)
+		return tokenData{}, fmt.Errorf("token exchange failed: %s", body)
+	}
+
+	var respData tokenData
+	err = json.NewDecoder(resp.Body).Decode(&respData)
+	if err != nil {
+		return tokenData{}, err
+	}
+
+	return respData, nil
+}
+
+// refreshToken refreshes the access token using the given refresh token
+func refreshToken(refreshToken string) (tokenData, error) {
+	client := &http.Client{Timeout: 10 * time.Second}
+
+	data := url.Values{}
+	data.Set("grant_type", "refresh_token")
+	data.Set("refresh_token", refreshToken)
+	data.Set("client_id", config.Server.ClientID)
+	data.Set("client_secret", config.Server.ClientSecret)
+
+	req, err := http.NewRequest("POST", config.Server.TokenURL, strings.NewReader(data.Encode()))
+	if err != nil {
+		return tokenData{}, err
+	}
+
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+
+	resp, err := client.Do(req)
+	if err != nil {
+		return tokenData{}, err
+	}
+
+	if resp.StatusCode != http.StatusOK {
+		return tokenData{}, fmt.Errorf("token refresh failed: %s", resp.Status)
+	}
+
+	var respData tokenData
+
+	if err := json.NewDecoder(resp.Body).Decode(&respData); err != nil {
+		return tokenData{}, err
+	}
+
+	return respData, nil
+}
+
+// createStateParam generates a random string of the specified length. It can be used as the OAuth 2.0 state parameter.
+func createStateParam(length int) string {
+	const charset = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
+	result := make([]byte, length)
+	for i := range result {
+		result[i] = charset[rand.Intn(len(charset))]
+	}
+	return string(result)
+}
+```
+
+## Final Notes
+
+<br />
+
+EzioAuth was fun to make. Also, if you haven't caught on, the name is a pun. It's a reference to Assassins Creed and it also sounds kind of like "Easy OAuth" if you say it fast enough :P. It's been really useful to me and if you want to try it out or star it on [GitHub](https://github.com/anishsinha-io/ezioauth) I'd be really grateful. Also, more detailed docs on how to use it are on the readme, along with the unabridged source.
+
+<br />
+
+I'll try to post more frequently! Hopefully at some point I'll get around to making a "notes" section. Anyways, I hope this was useful to someone! See you next time (:
+
+<br />
