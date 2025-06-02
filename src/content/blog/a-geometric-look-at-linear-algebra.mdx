@@ -1,0 +1,195 @@
+---
+title: "A Geometric Look at Linear Algebra"
+description: "Showcasing the power of a geometric perspective on linear algebra with an interactive visualization of linear algebra concepts written in C and compiled to webassembly"
+pubDate: "May 30 2025"
+tags:
+  - linear-algebra
+  - geometry
+  - wasm
+---
+
+import WASM from "~/components/WASM.astro";
+
+Hi, it's really been a while since my last post, hasn't it? I got a job a few months ago, by the way. I'm a software engineer now. I write Go and Python, mainly, at work. I have savings and a 401k. It's strange, moving to a completely new stage of life. I haven't forgotten about this blog, though. I actually think about it a lot, but I rarely get the time to sit down and write something _quality_ so a lot of the times I'll get halfway through a post before I scrap it. It's not good, I know. I'll be better about that so my...(checks notes)...less than 10 readers aren't disappointed. Speaking of the time since I've last posted...Tailwind 4.0 is out. I guess I "should" update this website but yeah no, I'm not going to do that...especially not right now. It just feels strange witnessing bit rot in real time. Software really does age, quickly. Anyway, I digress.
+
+<br />
+
+## On Linear Algebra
+
+<br />
+
+When I was taught linear algebra, I missed out on a lot of the meaning and intuition behind the subject. Upon revisiting it, free from the pressures of university, I've found that many concepts in linear algebra are elucidated extraordinarily well through the liberal usage of geometry and computer visualizations. I wrote a neat little visualization in C and compiled it to webassembly to illustrate the concepts of basis vectors, the determinant, eigenvalues, and eigenvectors. It's fully interactive and the [source code](https://github.com/anishsinha-io/linear-algebra) is freely available and MIT licensed. Feel free to use or adapt it to your own needs. I tried to make it relatively modular. Also, for the best experience, interact with the visualization on desktop, and preferably in full screen mode. If you're not in full screen, then the position of your mouse will be inaccurate so placing points won't work as expected. I really did try to fix this, but decided it wasn't worth it after around two hours of trying.
+
+<WASM
+  src="https://storage.googleapis.com/anishsinha.io/linear_algebra.js"
+  caption="Linear Algebra Visualized Geometrically"
+  link="https://github.com/anishsinha-io/linear-algebra"
+/>
+
+<br />
+
+## Matrices
+
+<br />
+
+One of the things that strikes me the most is just how _simple_ many linear algebra concepts are. For example, Take matrices as a concept that is needlessly complicated. Hit spacebar on the simulation, which will reset the simulation, and observe that the vectors i and j are
+
+<br />
+
+$$ \vec i = \begin{bmatrix} 1 \\ 0 \end{bmatrix} , \space \vec j = \begin {bmatrix} 0 \\ 1 \end{bmatrix} $$
+
+<br />
+
+The two vectors i and j are called the basis vectors. The euclidean plane (the design you see on a sheet of graph paper) is defined by these two basis vectors. Taken as a whole, i and j describe a plane, so we group them together as a matrix
+
+<br />
+$$ I_2 = \begin{bmatrix} 1 & 0 \\ 0 & 1 \end{bmatrix} $$
+
+<br />
+This matrix is named I sub 2 because it is the identity matrix for 2x2 matrices.
+You might now wonder, dear reader, _why_ we group basis vectors this way, and
+the answer is because it's convenient when we perform matrix-vector
+multiplication and matrix-matrix multiplication. Let's say I have the vector
+
+<br />
+$$ \vec u = \begin{bmatrix} 7 \\ 5 \end{bmatrix} $$
+
+<br />
+Full screen the simulation, and press shift+p near the point (7, 5) to represent
+the endpoint of this vector. Then you can represent the vector u as
+
+<br />
+
+$$ \vec u = 7 \cdot \begin{bmatrix} 1 \\ 0 \end{bmatrix} + 5 \cdot \begin{bmatrix} 0 \\ 1 \end{bmatrix} $$
+
+<br />
+
+This makes sense, right? We took 7 times the first basis vector and added it to
+5 times the second basis vector. We say that u is a _linear combination_ of the
+basis vectors of I sub 2. Hit However, what if we want to find out where the
+vector u will point to if we change our basis? Let's say the matrix
+describing our desired transformation is
+
+<br />
+
+$$ M = \begin{bmatrix} 1 & -4 \\ 0 & 1 \end{bmatrix} $$
+
+<br />
+You can visualize this by hitting spacebar in the simulation and holding down
+shift + the left arrow until the vector j looks like
+
+<br />
+
+$$ \vec j = \begin{bmatrix} -4 \\ 1 \end{bmatrix} $$
+
+<br />
+Transforming the original vector u to the plane described by the new basis can
+be done with the following procedure
+<br />
+
+$$ \vec u' = 7 \cdot \begin{bmatrix} 1 \\ 0 \end{bmatrix} + 5 \cdot \begin{bmatrix} -4 \\ 1 \end{bmatrix} = \begin{bmatrix} -13 \\ 5 \end{bmatrix} $$
+
+<br />
+
+The result is the sum of the x component of u multiplied by the first basis
+vector, summed with the y component of u multiplied by the second basis vector.
+Which can be written in the more familiar form (taught in schools)
+
+<br />
+
+$$ \begin{bmatrix} 1 & -4 \\ 0 & 1 \end{bmatrix} \begin{bmatrix} 7 \\ 5 \end{bmatrix} = \begin{bmatrix} (1)(7) + (-4)(5) \\ (0)(7) + (1)(5) \end{bmatrix} = \begin{bmatrix} -13 \\ 5 \end{bmatrix} $$
+
+<br />
+
+This is why matrix-vector multiplication is defined the way it's defined. To
+visualize it geometrically, hit space to reset the simulation and look at the
+point (7, 5) on the graph, that you made earlier. Perform the transformation to the basis described
+by the matrix M above by pressing `shift+left arrow` until the vector j matches the second column of M. Then count 7 lines along the x axis (in the direction of
+the i vector), and trace your cursor parallel to the j, for 5 lines. Hit
+space again to reset the simulation without moving your mouse, hit `shift+p` to add a point near your mouse, and look at the coordinates of that point
+your mouse has landed on (it should be (-13, 5)). You can add more gridlines with `+` to make it even more apparent. Using this logic, we can know where any vector should end up after any transformation.
+
+<br />
+
+The key takeaway I want you to glean from this, is that the operation of matrix-vector multiplication defines a _transformation_ that takes a vector to a new position. The calculation is not arbitrary. Similarly, matrix-matrix multiplication defines the composition of transformations.
+
+<br />
+
+## Determinants
+
+<br />
+
+Let's take determinants as another thing that is needlessly complicated by
+textbooks. The determinant of a 2x2 matrix is defined as
+
+<br />
+
+$$ det \begin{bmatrix} a & b \\ c & d \end{bmatrix} = ad-bc $$
+
+<br />
+and the determinant of a 3x3 matrix is defined as
+<br />
+
+$$ det \begin{bmatrix} a & b & c \\ d & e & f \\ g & h & i \end{bmatrix} = $$
+
+<br />
+
+$$ a \cdot det \begin{bmatrix} e & f \\ h & i \end{bmatrix} - b \cdot det \begin{bmatrix} d & f \\ g & i \end{bmatrix} + c \cdot det \begin{bmatrix} d & e \\ g & h \end{bmatrix} $$
+
+<br />
+
+One of the things that linear algebra courses often do extremely poorly is explain why the determinant is defined this way, and why it even matters. No course I've ever taken approaches the topic geometrically. Let me tell you what a determinant is. It is the area defined by the parallelogram formed between the two basis vectors i and j in the simulation. It's colored blue in the simulation if it's positive, and in orange if it's negative. Geometrically, it represents the factor by which the areas of regions in the plane are scaled. Whether the determinant is positive or negative has to do with the orientation of the plane. If you lift up the plane like a sheet of paper and flip it over to the other side, that's reversing the orientation. That causes the determinant to change sign. To illustrate this really easily, hit the space bar in the simulation to reset the grid to a square grid, and hold down shift + the left arrow until the determinant (in blue) changes its sign and turns orange. It's trivial to see that what you did is flip the plane over, and while the area of the parallelogram cannot be negative, the negative or positive sign reflects the orientation of the plane.
+
+<br />
+
+Take a look at the ball moving in a circular path on the grid. As you use the arrow keys and the area of the determinant changes, take a look at how the area bounded by that circular path grows or shrinks. If you shrink the grid by making i and j smaller, then the original area shrinks. If you increase the magnitude of i or j or both, then the area increases. The determinant is the factor by which that area grows or shrinks. When the determinant is negative, the ball moves in the opposite direction, around the same area. This is a really neat way to visualize the concept of orientation.
+
+<br />
+
+In three dimensions, the determinant is the volume of the solid formed by dragging that parallogram some way in the z direction, forming an object known as a parallelepiped. It can also be negative, in the same way that the determinant of a 2x2 matrix can be negative. Let me stress that this volume's geometric meaning is the factor by which all regions in the vector space scale.
+
+<br />
+
+## Column Space and Null Space
+
+<br />
+
+The _span_ of a matrix is the set of points that are reachable through a linear combination of the columns of a matrix. This is also called the column space of the matrix. If the two columns of the matrix are vectors that don't lie on the same line, then all points on the plane can be reached, so we say that the columns are linearly independent. If the two basis vectors point in the same direction, or lie on the same line, then only the points along that one line can be reached, and we say that the columns of the matrix are linearly dependent. You can simulate this by pressing the arrow keys until the two vectors i and j lie on the same line. If you shrink down both vectors to a length of zero, then you have two zero vectors and you can't go anywhere. The null space represents all the vectors that get squished, during the transformation. So if you squish a plane into a line, then all the vectors that got squished down onto that line are part of the null space.
+
+<br />
+
+## Eigenvalues and Eigenvectors
+
+<br />
+
+The last thing I want to touch on are eigenvalues and eigenvectors. I don't want to spend too much time here because I think they're one of the more intuitive things in linear algebra, but here's a brief explanation. Eigenvectors are vectors that, after the application of a matrix transformation, end up on the same line after the transformation. Our vector
+
+<br />
+
+$$ \vec u = \begin{bmatrix} 7 \\ 5 \end{bmatrix} $$
+
+<br />
+
+did not end up on the same line after it was transformed. However, some do. If it ends up on the same line, but just gets longer or shorter, then the factor by which the vector is scaled is an eigenvalue. Put in a sentence, eigenvectors are vectors that, after transformed by a matrix, are only scaled, with the scale factor called the eigenvalue. Not all matrices have eigenvalues. Play around with the simulation until the green lines disappear. Can you notice why they disappear? Some matrices only have one eigenvalue. Try simulating a _shear_. To do this, hold down shift+the left arrow or the right arrow. Notice how only one green vector appears. The lambda above it is the sole eigenvalue of the matrix.
+
+<br />
+
+Remember the matrix we used earlier? The one defined as
+
+<br />
+
+$$ M = \begin{bmatrix} 1 & -4 \\ 0 & 1 \end{bmatrix} $$
+
+<br />
+
+This represents a left shear.
+
+<br />
+
+Eigenvalues and eigenvectors are extremely useful, and many of their applications have to do with performing computationally expensive operations on matrices. For example, taking a matrix to a high power (often needed when calculating infinite series), which is very computationally expensive can be accomplished more efficiently with a technique called eigendecomposition. I won't go into these things too much. My goal is to express my geometric intuition of some of the _essence_ of linear algebra to you.
+
+<br />
+
+Geometry often provides a beautiful intuition of complex topics, and more often than you might expect, mathematical concepts are not as unapproachable as they may initially seem. I hope this post was useful, and if you found this interesting, I highly recommend [this playlist](https://www.youtube.com/playlist?list=PLZHQObOWTQDPD3MizzM2xVFitgF8hE_ab) on the essence of linear algebra by 3Blue1Brown on YouTube. Thank you for reading.
+
+<br />

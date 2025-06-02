@@ -1,0 +1,96 @@
+---
+import "~/styles/global.css";
+
+import { MdFullscreen } from "react-icons/md";
+
+interface Props {
+  src: string;
+  caption: string;
+  link?: string;
+}
+
+const { src, caption, link } = Astro.props;
+---
+
+<div class="flex overflow-hidden relative flex-col gap-2 items-center my-8">
+  <div
+    class="absolute z-50 text-xs top-[25px] right-[25px] bg-midnight text-offwhite"
+  >
+    <button
+      class="flex items-center"
+      onclick="Module.requestFullscreen(false, true);"
+      ><MdFullscreen size={30} />
+    </button>
+  </div>
+
+  <canvas class="max-w-full rounded-md emscripten" id="canvas" tabindex="-1"
+  ></canvas>
+  <small class="self-start"
+    >{caption}{
+      link ? (
+        <>
+          |
+          <a href={link} about="_blank" rel="noreferrer">
+            Source
+          </a>
+        </>
+      ) : (
+        ""
+      )
+    }</small
+  >
+</div>
+
+<script type="text/javascript" is:inline>
+  var canvasElement = document.getElementById("canvas");
+
+  var Module = {
+    canvas: canvasElement,
+
+    onRuntimeInitialized: function () {
+      console.log("WASM module initialized");
+    },
+  };
+
+  canvasElement.addEventListener("contextmenu", (e) => {
+    e.preventDefault();
+  });
+
+  document.addEventListener("fullscreenchange", () => {
+    if (document.fullscreenElement) {
+      Module.canvas.style.cursor = "default";
+    }
+  });
+
+  const isFullyVisible = (el) => {
+    const rect = el.getBoundingClientRect();
+    return (
+      rect.top >= 0 &&
+      rect.left >= 0 &&
+      rect.bottom <=
+        (window.innerHeight || document.documentElement.clientHeight) &&
+      rect.right <= (window.innerWidth || document.documentElement.clientWidth)
+    );
+  };
+
+  window.addEventListener("keydown", (e) => {
+    const canvas = document.getElementById("canvas");
+    switch (e.code) {
+      case "ArrowUp":
+      case "ArrowDown":
+      case "ArrowLeft":
+      case "ArrowRight":
+        if (isFullyVisible(canvas)) {
+          e.preventDefault();
+        }
+        break;
+
+      case "Space":
+        e.preventDefault();
+      default:
+        break; // do not block other keys
+    }
+  });
+</script>
+
+<script async type="text/javascript" src=`${src}` is:inline></script>
