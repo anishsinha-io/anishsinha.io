@@ -1,0 +1,95 @@
+---
+title: "Deriving a Power Series for π"
+description: "One way to derive π (pi) from first principles"
+pubDate: "August 6 2025"
+tags:
+  - calculus
+  - power-series
+---
+
+Today, I want to talk about how you can use a power series to define π. No CS today, all math! My impetus for writing this post was reading through the chapter 11.9 exercises of Stewart Calculus, one of which asks you to prove that a specific infinite series equals π, so I wanted to take it a step further and derive that series from the definitions of trigonometric functions. Hope you enjoy!
+
+<br />
+
+Given a right triangle, we define the main trigonometric functions as follows:
+
+$$ sin(\theta) = o/h, \space cos(\theta) = a/h $$
+
+where o and a are the opposite and adjacent sides relative to the angle, and the hypotenuse is the side opposite the 90 degree angle. From the definitions of sine and cosine, we derive the `tan`, `csc`, `sec`, and `cot` functions. Tangent, in particular, is defined as
+
+$$ tan(\theta)=sin(\theta)/cos(\theta)=o/a $$
+
+The trigonometric functions each have inverses, and we can define them. For `arctan`, it is
+
+$$ x=tan(y) \rightarrow y=arctan(x) $$
+
+Using implicit differentiation, we can calculate the derivative of `arctan` easily:
+
+$$ 1 = sec^2(y)\frac{dy}{dx} \rightarrow \frac{dy}{dx}=\frac{1}{sec^2(y)} $$
+
+If we draw a right triangle with the angle `y`, we can see that
+
+$$ sec(x)=\sqrt{1+x^2} \rightarrow sec^2(x)=1+x^2 $$
+
+which implies that
+
+$$
+\frac{dy}{dx}=\frac{1}{1+x^2}
+$$
+
+From the definition of power series and geometric series, we know that
+
+$$
+\frac{1}{1-x}=\sum_{n=0}^{\infty}x^n, \space |x|<1
+$$
+
+We can derive a series for
+
+$$ f(x)=\frac{1}{1+x^2} $$
+
+by rewriting it as
+
+$$
+\frac{1}{1-(-x^2)}=\sum_{n=0}^{\infty}(-1)^nx^{2n}, \space |x|<1
+$$
+
+$$
+= 1-x^2+x^4-x^6+\cdots
+$$
+
+If we integrate term by term, we can derive the power series for `arctan` by integrating term by term like so:
+
+$$
+\int \sum_{n=0}^{\infty}(-1)^nx^{2n} = x-\frac{x^3}{3}+\frac{x^5}{5}-\frac{x^7}{7}+\cdots
+$$
+
+$$
+= \sum_{n=0}^{\infty}(-1)^n\frac{x^{2n+1}}{2n+1}, \space |x|<1
+$$
+
+We can evaluate the endpoints (x=±1), but we don't need to for our purposes. We can just use the fact that
+
+$$ arctan(\frac{\sqrt{3}}{3})=\frac{\pi}{6} \rightarrow \pi = 6 \cdot arctan(\frac{\sqrt{3}}{3})$$
+
+Since π/6 is in the interval of convergence, if we evaluate the series at that value, and multiply the whole thing by 6, we get
+
+$$
+
+\pi = 6 \cdot \sum_{n=0}^{\infty}(-1)^n\frac{(\frac{\sqrt{3}}{3})^{2n+1}}{2n+1}
+
+
+$$
+
+which simplifies to
+
+$$
+
+\pi = 2\sqrt{3} \cdot \sum_{n=0}^{\infty}(-1)^n\frac{1}{3^n(2n+1)}
+
+
+$$
+
+This converges pretty slowly, and isn't a great approximation, and you probably shouldn't use it to calculate π. If you're just a _user_ of pi, just hardcode the value or use your programming language's hardcoded value. If you actually care about calculating the digits of π, use the [Ramanujan-Sato series](https://en.wikipedia.org/wiki/Ramanujan%E2%80%93Sato_series) or the [Chudnovsky algorithm](https://en.wikipedia.org/wiki/Chudnovsky_algorithm). I wrote this post because I think it's pretty cool that you can define π as an infinite series.
+
+<br />
+Anyway, till next time, thanks for reading (:
